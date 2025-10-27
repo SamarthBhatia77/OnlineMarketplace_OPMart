@@ -18,3 +18,24 @@
   0% { opacity: 0; transform: translateY(-10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+
+/*dark mode toggling*/
+/* Configure dark mode variant for class-based toggling */
+@variant dark (&:where(.dark, .dark *));
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+/* Define custom theme variables */
+@theme {
+  --font-poppins: "Poppins", sans-serif;
+}
+
+/* Base styles with dark mode support */
+@layer base {
+  body {
+    @apply bg-white text-gray-900 transition-colors duration-300;
+    @apply dark:bg-gray-900 dark:text-gray-100;
+  }
+}
+

@@ -1,9 +1,9 @@
 import Image from "next/image";
-import Navbar from "../../components/navbar";
+
 export default function Home() {
   return (
-    <div>
-      <Navbar></Navbar>
+    <div className="">
+      <p className="mt-40 mb-40 ml-145 underline">Content of the page will go here !</p>
     </div>
   );
 }

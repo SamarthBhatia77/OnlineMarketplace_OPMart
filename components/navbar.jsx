@@ -1,12 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 
 const Navbar = () => {
   const [showCategories, setShowCategories] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const categories = [
     'Electronics',
@@ -39,23 +47,26 @@ const Navbar = () => {
     router.push('/cart');
   };
 
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
   return (
     <nav className="sticky top-0 z-50 bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
           
           {/* Brand/Logo */}
-            <div className="flex-shrink-0">
+          <div className="flex-shrink-0">
             <h1 className="text-2xl md:text-3xl font-bold text-white tracking-wide cursor-pointer transition-colors duration-300 drop-shadow-lg font-poppins">
-                OOPMart
+              OOPMart
             </h1>
-            </div>
-
+          </div>
 
           {/* Search Bar */}
-            <div className="flex-1 max-w-2xl mx-4 hidden md:flex">
+          <div className="flex-1 max-w-2xl mx-4 hidden md:flex">
             <div className="relative w-full flex items-center gap-2">
-                <input
+              <input
                 type="text"
                 className="w-full px-5 py-2.5 rounded-full bg-white text-gray-700 placeholder-gray-500 border-2 border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-orange-400 transition-all duration-300 pr-4"
                 placeholder="Search for products, brands and more..."
@@ -63,27 +74,26 @@ const Navbar = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={handleKeyPress}
                 aria-label="Search products"
-                />
-                <button
+              />
+              <button
                 onClick={handleSearch}
                 className="absolute right-2 h-10 w-10 bg-orange-600 rounded-full text-white hover:bg-orange-700 transition-colors duration-300 flex items-center justify-center shadow-md"
                 aria-label="Search"
-                >
+              >
                 <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-5 w-5" 
-                    fill="none" 
-                    viewBox="0 0 24 24" 
-                    stroke="currentColor"
-                    strokeWidth={2}
+                  xmlns="http://www.w3.org/2000/svg" 
+                  className="h-5 w-5" 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                  strokeWidth={2}
                 >
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
                 </svg>
-                </button>
+              </button>
             </div>
-            </div>
-
+          </div>
 
           {/* Categories Dropdown - Fixed hover behavior */}
           <div 
@@ -124,6 +134,51 @@ const Navbar = () => {
               </div>
             )}
           </div>
+          
+          {/* Dark Mode Toggle Button */}
+          {mounted && (
+            <div className="flex-shrink-0">
+              <button
+                onClick={toggleTheme}
+                className="relative p-3 bg-white/20 backdrop-blur-md border-2 h-11 w-11 border-white/30 rounded-full text-white hover:bg-white/30 hover:border-white/50 transition-all duration-300 hover:-translate-y-0.5 hover:scale-105"
+                aria-label="Toggle dark mode"
+              >
+                {theme === 'dark' ? (
+                  // Sun Icon (shows in dark mode)
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-5 w-5" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                  </svg>
+                ) : (
+                  // Moon Icon (shows in light mode)
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-5 w-5" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Cart Button */}
           <div className="flex-shrink-0">
