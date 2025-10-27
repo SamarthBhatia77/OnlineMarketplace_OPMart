@@ -35,7 +35,12 @@
 @layer base {
   body {
     @apply bg-white text-gray-900 transition-colors duration-300;
-    @apply dark:bg-gray-900 dark:text-gray-100;
+    @apply dark:bg-gray-900 dark:text-gray-100; 
   }
 }
 
+/* Custom text selection colors */
+::selection {
+  background-color: #000000; /* Black background */
+  color: #ff8636; /* Orange text */
+}
