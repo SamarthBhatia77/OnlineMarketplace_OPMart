@@ -35,7 +35,7 @@ const Footer = () => {
               </h2>
             </div>
             <p className="text-gray-400 text-[40px] italic font-light">
-              Your favourite selling spot
+              Everyone's favorite shopping destination!
             </p>
           </div>
 

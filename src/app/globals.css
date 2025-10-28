@@ -39,8 +39,3 @@
   }
 }
 
-/* Custom text selection colors */
-::selection {
-  background-color: #000000; /* Black background */
-  color: #ff8636; /* Orange text */
-}
