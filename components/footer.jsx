@@ -28,14 +28,14 @@ const Footer = () => {
           <div className="space-y-6">
             <div>
               <h2 className="text-5xl md:text-8xl mb-4 font-bold font-poppins leading-none bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">
-                OOP
+                OP
               </h2>
               <h2 className="text-5xl md:text-8xl font-bold font-poppins leading-none bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">
                 MART
               </h2>
             </div>
             <p className="text-gray-400 text-[40px] italic font-light">
-              Everyone's favorite shopping destination!
+           "Tu haan kar ya na kar, mai hu teri FAVORITE shopping mart"
             </p>
           </div>
 
@@ -124,7 +124,7 @@ const Footer = () => {
         <div className="border-t border-gray-800 mt-12 pt-8 text-center">
           <p className="text-gray-500 text-sm flex items-center justify-center gap-2">
             <span className="text-orange-500">©</span> 
-            <span className="font-semibold">OOPMART</span> 
+            <span className="font-semibold">OPMART</span> 
             2025 - All rights reserved
           </p>
         </div>

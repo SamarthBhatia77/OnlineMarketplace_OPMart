@@ -2,8 +2,8 @@
 const products = [
   {
     id: 1,
-    title: "PlayStation Sony God Of War Ragnarok",
-    subtitle: "Standard Edition | PS5 Game (PlayStation 5)",
+    title: "Tekken Tag Tournament 2",
+    subtitle: "Standard Edition | PS3 Game (PlayStation 3)",
     price: 3218,
     originalPrice: 5199,
     discount: 38,
@@ -11,8 +11,8 @@ const products = [
     reviews: 3500,
     deliveryDate: "Tomorrow, 30 Oct",
     stock: 15,
-    image: "/images/products/god-of-war.jpg",
-    badge: "PEGI Rating: Ages 18 & Over"
+    image: "/images/products/TekkenTag2.jpg",
+    badge: "PS3 Games"
   },
   {
     id: 2,
@@ -26,7 +26,7 @@ const products = [
     deliveryDate: "2-3 days",
     stock: 50,
     image: "/images/products/goodys-powder.jpg",
-    badge: "24 Packets"
+    badge: "Medicine"
   },
   {
     id: 3,
@@ -40,7 +40,7 @@ const products = [
     deliveryDate: "Tomorrow, 30 Oct",
     stock: 8,
     image: "/images/products/iphone-15-pro-max.jpg",
-    badge: "Limited Stock"
+    badge: "Electronics"
   },
   {
     id: 4,
@@ -66,9 +66,51 @@ const products = [
     rating: 4.4,
     reviews: 8021,
     deliveryDate: "Today, 29 Oct",
-    stock: 98,
+    stock: 11,
     image: "/images/products/thomas-calculus.jpg",
     badge: "College Essentials"
+  },
+  {
+    id: 6,
+    title: "Kapa Tshirt",
+    subtitle: "Made from 100% authentic Indian Cotton",
+    price: 2999,
+    originalPrice: 5200,
+    discount: 45,
+    rating: 4.9,
+    reviews: 3452,
+    deliveryDate: "Today, 29 Oct",
+    stock: 3,
+    image: "/images/products/kapa-tshirt.jpg",
+    badge: "Clothing for men"
+  },
+  {
+    id: 7,
+    title: "Brawl stars gift card",
+    subtitle: "1000 trophies and skins included",
+    price: 5999,
+    originalPrice: null,
+    discount: null,
+    rating: 3.4,
+    reviews: 1503,
+    deliveryDate: "Today, 29 Oct",
+    stock: 87,
+    image: "/images/products/brawlstars-giftcard.jpg",
+    badge: "GiftCard"
+  },
+  {
+    id: 8,
+    title: "Toy Bazooka",
+    subtitle: "Safe for kids, meant for collectors",
+    price: 15000,
+    originalPrice: null,
+    discount: null,
+    rating: 2.1,
+    reviews: 143,
+    deliveryDate: "Today, 29 Oct",
+    stock: 23,
+    image: "/images/products/bazooka.jpg",
+    badge: "Kid's Toys"
   }
 ];
 

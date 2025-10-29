@@ -53,7 +53,7 @@ const Navbar = () => {
   };
 
   const handleChangeAccount = () => {
-    router.push('/signin');
+    router.push('/portfolioChoose');
     setShowUserMenu(false);
   };
 
@@ -70,7 +70,7 @@ const Navbar = () => {
           {/* Brand/Logo */}
           <div className="flex-shrink-0">
             <h1 className="text-2xl md:text-3xl font-bold text-white tracking-wide cursor-pointer transition-colors duration-300 drop-shadow-lg font-poppins">
-              OOPMart 🎯
+              OPMart 🎯
             </h1>
           </div>
 
