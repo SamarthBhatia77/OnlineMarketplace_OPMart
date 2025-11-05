@@ -1,12 +1,111 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import products from '../data/products';
+import products from '@/data/products';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
+
+// Toast Notification Component
+const Toast = ({ message, isVisible, onClose }) => {
+  const [shouldRender, setShouldRender] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) {
+      // First render the component
+      setShouldRender(true);
+      
+      // Then trigger animation after a tiny delay
+      setTimeout(() => {
+        setIsAnimating(true);
+      }, 10);
+
+      // Auto-hide after 3 seconds
+      const timer = setTimeout(() => {
+        setIsAnimating(false);
+        setTimeout(() => {
+          setShouldRender(false);
+          onClose();
+        }, 300); // Wait for exit animation
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, onClose]);
+
+  if (!shouldRender) return null;
+
+  return (
+    <div 
+      className={`fixed top-20 right-4 z-50 transition-all duration-300 ease-out ${
+        isAnimating 
+          ? 'translate-x-0 opacity-100' 
+          : 'translate-x-full opacity-0'
+      }`}
+    >
+      <div className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 rounded-lg shadow-2xl p-4 min-w-[320px] max-w-md">
+        <div className="flex items-start gap-3">
+          {/* Orange Checkmark Circle */}
+          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center">
+            <svg 
+              className="w-5 h-5 text-white" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={3} 
+                d="M5 13l4 4L19 7" 
+              />
+            </svg>
+          </div>
+
+          {/* Message */}
+          <div className="flex-1">
+            <p className="text-gray-900 dark:text-white font-semibold text-base">
+              {message}
+            </p>
+          </div>
+
+          {/* Close Button */}
+          <button
+            onClick={() => {
+              setIsAnimating(false);
+              setTimeout(() => {
+                setShouldRender(false);
+                onClose();
+              }, 300);
+            }}
+            className="flex-shrink-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+          >
+            <svg 
+              className="w-5 h-5" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M6 18L18 6M6 6l12 12" 
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ProductCard component defined in the same file
 const ProductCard = ({ product, onAddToCart }) => {
+  const router = useRouter();  // ✅ Add this hook
+  
   const {
     title,
     subtitle,
@@ -35,8 +134,16 @@ const ProductCard = ({ product, onAddToCart }) => {
     return 'text-green-600';
   };
 
+  // ✅ Add click handler for the card
+  const handleCardClick = () => {
+    router.push(`/product/${product.id}`);
+  };
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group">
+    <div 
+      onClick={handleCardClick}  // ✅ Add click handler
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group flex flex-col h-full cursor-pointer"  // ✅ Add cursor-pointer
+    >
       {badge && (
         <div className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 inline-block">
           {badge}
@@ -57,7 +164,7 @@ const ProductCard = ({ product, onAddToCart }) => {
         )}
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 flex flex-col flex-grow">
         <h3 className="text-lg font-bold text-gray-900 dark:text-white line-clamp-2 hover:text-orange-600 cursor-pointer transition-colors">
           {title}
         </h3>
@@ -110,41 +217,84 @@ const ProductCard = ({ product, onAddToCart }) => {
           {stock <= 10 ? `Only ${stock} left in stock!` : `${stock} in stock`}
         </div>
 
-        <button
-          onClick={() => onAddToCart(product)}
-          className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
-        >
-          <svg 
-            className="w-5 h-5" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+        {/* This div pushes the button to the bottom */}
+        <div className="mt-auto pt-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();  // ✅ Prevent card click when clicking button
+              onAddToCart(product);
+            }}
+            className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 flex items-center justify-center gap-2"
           >
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" 
-            />
-          </svg>
-          Add to Cart
-        </button>
+            <svg 
+              className="w-5 h-5" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" 
+              />
+            </svg>
+            Add to Cart
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
+
 export default function Home() {
   const [cart, setCart] = useState([]);
+  const [sortBy, setSortBy] = useState('default');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const handleAddToCart = (product) => {
     setCart([...cart, product]);
-    alert(`${product.title} added to cart!`);
+    setToastMessage('Added item to cart');
+    setShowToast(true);
   };
+
+  // Sort products based on selected filter
+  const getSortedProducts = () => {
+    const productsCopy = [...products];
+    
+    switch(sortBy) {
+      case 'price-low-high':
+        return productsCopy.sort((a, b) => a.price - b.price);
+      case 'price-high-low':
+        return productsCopy.sort((a, b) => b.price - a.price);
+      case 'rating-low-high':
+        return productsCopy.sort((a, b) => a.rating - b.rating);
+      case 'rating-high-low':
+        return productsCopy.sort((a, b) => b.rating - a.rating);
+      case 'stock-low-high':
+        return productsCopy.sort((a, b) => a.stock - b.stock);
+      case 'stock-high-low':
+        return productsCopy.sort((a, b) => b.stock - a.stock);
+      default:
+        return productsCopy;
+    }
+  };
+
+  const sortedProducts = getSortedProducts();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Navbar/>
+      
+      {/* Toast Notification */}
+      <Toast 
+        message={toastMessage}
+        isVisible={showToast}
+        onClose={() => setShowToast(false)}
+      />
+      
       <section className="bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-5xl font-bold font-poppins mb-4">
@@ -157,17 +307,51 @@ export default function Home() {
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
             Featured Products
           </h2>
-          <span className="text-gray-600 dark:text-gray-400">
-            {products.length} items
-          </span>
+          
+          <div className="flex items-center gap-4">
+            <span className="text-gray-600 dark:text-gray-400">
+              {products.length} items
+            </span>
+            
+            {/* Sort Filter Dropdown */}
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="appearance-none px-4 py-2 pr-10 bg-white dark:bg-gray-800 border-2 border-orange-200 dark:border-orange-600 rounded-lg text-gray-700 dark:text-gray-200 font-semibold cursor-pointer hover:border-orange-400 dark:hover:border-orange-500 focus:outline-none focus:border-orange-400 dark:focus:border-orange-500 transition-all duration-300"
+              >
+                <option value="default">Sort By</option>
+                <optgroup label="Price">
+                  <option value="price-low-high">Price: Low to High</option>
+                  <option value="price-high-low">Price: High to Low</option>
+                </optgroup>
+                <optgroup label="Rating">
+                  <option value="rating-low-high">Rating: Low to High</option>
+                  <option value="rating-high-low">Rating: High to Low</option>
+                </optgroup>
+                <optgroup label="Stock">
+                  <option value="stock-low-high">Stock: Low to High</option>
+                  <option value="stock-high-low">Stock: High to Low</option>
+                </optgroup>
+              </select>
+              <svg 
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-600 dark:text-orange-400 pointer-events-none" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {products.map((product) => (
+          {sortedProducts.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
@@ -178,7 +362,7 @@ export default function Home() {
       </section>
 
       {cart.length > 0 && (
-        <div className="fixed bottom-8 right-8 bg-orange-600 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-2xl">
+        <div className="fixed bottom-8 right-8 bg-orange-600 text-white rounded-full w-16 h-16 flex items-center justify-center shadow-2xl z-50">
           <div className="text-center">
             <span className="text-2xl font-bold">{cart.length}</span>
             <p className="text-xs">items</p>
@@ -186,6 +370,8 @@ export default function Home() {
         </div>
       )}
       <Footer/>
+
+      
     </div>
   );
 }
