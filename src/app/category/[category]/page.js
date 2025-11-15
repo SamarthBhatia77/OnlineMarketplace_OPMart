@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 
-// Toast Notification Component
+// Toast Component
 const Toast = ({ message, isVisible, onClose }) => {
   const [shouldRender, setShouldRender] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -14,7 +14,6 @@ const Toast = ({ message, isVisible, onClose }) => {
   useEffect(() => {
     if (isVisible) {
       setShouldRender(true);
-      
       setTimeout(() => {
         setIsAnimating(true);
       }, 10);
@@ -44,27 +43,15 @@ const Toast = ({ message, isVisible, onClose }) => {
       <div className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 rounded-lg shadow-2xl p-4 min-w-[320px] max-w-md">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-orange-500 to-red-600 rounded-full flex items-center justify-center">
-            <svg 
-              className="w-5 h-5 text-white" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={3} 
-                d="M5 13l4 4L19 7" 
-              />
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-
           <div className="flex-1">
             <p className="text-gray-900 dark:text-white font-semibold text-base">
               {message}
             </p>
           </div>
-
           <button
             onClick={() => {
               setIsAnimating(false);
@@ -75,18 +62,8 @@ const Toast = ({ message, isVisible, onClose }) => {
             }}
             className="flex-shrink-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
           >
-            <svg 
-              className="w-5 h-5" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M6 18L18 6M6 6l12 12" 
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
@@ -95,7 +72,7 @@ const Toast = ({ message, isVisible, onClose }) => {
   );
 };
 
-// ProductCard component
+// ProductCard Component
 const ProductCard = ({ product, onAddToCart }) => {
   const router = useRouter();
   
@@ -238,23 +215,39 @@ const ProductCard = ({ product, onAddToCart }) => {
   );
 };
 
-export default function Home() {
+export default function CategoryPage({ params }) {
+  const router = useRouter();
+  const [categoryName, setCategoryName] = useState(null);
+  const [categoryProducts, setCategoryProducts] = useState([]);
   const [cart, setCart] = useState([]);
-  const [sortBy, setSortBy] = useState('default');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [products, setProducts] = useState([]);  // ✅ Added
-  const [loading, setLoading] = useState(true);   // ✅ Added
+  const [loading, setLoading] = useState(true);  // ✅ Added
 
-  // ✅ Fetch products from database
   useEffect(() => {
-    async function fetchProducts() {
+    async function fetchCategoryProducts() {
       try {
+        const resolvedParams = await params;
+        const category = resolvedParams.category;
+        
+        // Convert URL slug to proper format
+        const formattedCategory = category
+          .split('-')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        setCategoryName(formattedCategory);
+        
+        // ✅ Fetch from API instead of filtering local array
         const response = await fetch('/api/products');
         const data = await response.json();
         
         if (data.success) {
-          setProducts(data.products);
+          // Filter products by category
+          const filtered = data.products.filter(product => 
+            product.badge.toLowerCase() === formattedCategory.toLowerCase()
+          );
+          setCategoryProducts(filtered);
         }
       } catch (error) {
         console.error('Error fetching products:', error);
@@ -263,8 +256,8 @@ export default function Home() {
       }
     }
     
-    fetchProducts();
-  }, []);
+    fetchCategoryProducts();
+  }, [params]);
 
   const handleAddToCart = (product) => {
     setCart([...cart, product]);
@@ -272,107 +265,77 @@ export default function Home() {
     setShowToast(true);
   };
 
-  const getSortedProducts = () => {
-    const productsCopy = [...products];
-    
-    switch(sortBy) {
-      case 'price-low-high':
-        return productsCopy.sort((a, b) => a.price - b.price);
-      case 'price-high-low':
-        return productsCopy.sort((a, b) => b.price - a.price);
-      case 'rating-low-high':
-        return productsCopy.sort((a, b) => a.rating - b.rating);
-      case 'rating-high-low':
-        return productsCopy.sort((a, b) => b.rating - a.rating);
-      case 'stock-low-high':
-        return productsCopy.sort((a, b) => a.stock - b.stock);
-      case 'stock-high-low':
-        return productsCopy.sort((a, b) => b.stock - a.stock);
-      default:
-        return productsCopy;
-    }
-  };
-
-  const sortedProducts = getSortedProducts();
-
   // ✅ Show loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading products...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading category...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (categoryProducts.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <Navbar />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            {categoryName}
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
+            No products found in this category yet.
+          </p>
+          <button
+            onClick={() => router.push('/')}
+            className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+          >
+            Go Back Home
+          </button>
+        </div>
+        <Footer />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navbar/>
-      
+      <Navbar />
+
       <Toast 
         message={toastMessage}
         isVisible={showToast}
         onClose={() => setShowToast(false)}
       />
-      
+
       <section className="bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-5xl font-bold font-poppins mb-4">
-            Welcome to OPMart!
+            {categoryName}
           </h1>
           <p className="text-xl text-orange-100">
-            Product dekhlo kahin se, kharidoge yahin se
+            Explore our {categoryName.toLowerCase()} collection
           </p>
         </div>
       </section>
 
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+        <div className="flex items-center justify-between mb-8">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Featured Products
+            {categoryProducts.length} Products
           </h2>
-          
-          <div className="flex items-center gap-4">
-            <span className="text-gray-600 dark:text-gray-400">
-              {products.length} items
-            </span>
-            
-            <div className="relative">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="appearance-none px-4 py-2 pr-10 bg-white dark:bg-gray-800 border-2 border-orange-200 dark:border-orange-600 rounded-lg text-gray-700 dark:text-gray-200 font-semibold cursor-pointer hover:border-orange-400 dark:hover:border-orange-500 focus:outline-none focus:border-orange-400 dark:focus:border-orange-500 transition-all duration-300"
-              >
-                <option value="default">Sort By</option>
-                <optgroup label="Price">
-                  <option value="price-low-high">Price: Low to High</option>
-                  <option value="price-high-low">Price: High to Low</option>
-                </optgroup>
-                <optgroup label="Rating">
-                  <option value="rating-low-high">Rating: Low to High</option>
-                  <option value="rating-high-low">Rating: High to Low</option>
-                </optgroup>
-                <optgroup label="Stock">
-                  <option value="stock-low-high">Stock: Low to High</option>
-                  <option value="stock-high-low">Stock: High to Low</option>
-                </optgroup>
-              </select>
-              <svg 
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-600 dark:text-orange-400 pointer-events-none" 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-              </svg>
-            </div>
-          </div>
+          <button
+            onClick={() => router.push('/')}
+            className="text-orange-600 hover:text-orange-700 underline"
+          >
+            ← Back to Home
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {sortedProducts.map((product) => (
+          {categoryProducts.map((product) => (
             <ProductCard
               key={product._id}  // ✅ Changed to _id
               product={product}
@@ -390,7 +353,7 @@ export default function Home() {
           </div>
         </div>
       )}
-      <Footer/>
+      <Footer />
     </div>
   );
 }

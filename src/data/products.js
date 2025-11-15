@@ -12,7 +12,7 @@ const products = [
     deliveryDate: "Tomorrow, 30 Oct",
     stock: 15,
     image: "/images/products/TekkenTag2.jpg",
-    badge: "PS3 Games"
+    badge: "Gaming"
   },
   {
     id: 2,
@@ -26,7 +26,7 @@ const products = [
     deliveryDate: "2-3 days",
     stock: 50,
     image: "/images/products/goodys-powder.jpg",
-    badge: "Medicine"
+    badge: "Health"  // ✅ Changed from "Health & Wellness"
   },
   {
     id: 3,
@@ -54,7 +54,7 @@ const products = [
     deliveryDate: "Tomorrow, 30 Oct",
     stock: 23,
     image: "/images/products/sony-headphones.jpg",
-    badge: "Best Seller"
+    badge: "Electronics"
   },
   {
     id: 5,
@@ -68,7 +68,7 @@ const products = [
     deliveryDate: "Today, 29 Oct",
     stock: 11,
     image: "/images/products/thomas-calculus.jpg",
-    badge: "College Essentials"
+    badge: "Books"
   },
   {
     id: 6,
@@ -82,7 +82,7 @@ const products = [
     deliveryDate: "Today, 29 Oct",
     stock: 3,
     image: "/images/products/kapa-tshirt.jpg",
-    badge: "Clothing for men"
+    badge: "Fashion"
   },
   {
     id: 7,
@@ -96,7 +96,7 @@ const products = [
     deliveryDate: "Today, 29 Oct",
     stock: 87,
     image: "/images/products/brawlstars-giftcard.jpg",
-    badge: "GiftCard"
+    badge: "Gaming"
   },
   {
     id: 8,
@@ -110,7 +110,7 @@ const products = [
     deliveryDate: "Today, 29 Oct",
     stock: 23,
     image: "/images/products/bazooka.jpg",
-    badge: "Kid's Toys"
+    badge: "Toys"
   }
 ];
 

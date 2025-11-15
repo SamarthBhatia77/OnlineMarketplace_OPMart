@@ -21,15 +21,15 @@ const Navbar = () => {
     'Electronics',
     'Gaming',
     'Groceries',
-    'Fashion & Clothing',
+    'Fashion',
     'Accessories',
-    'Music & Instruments',
-    'Home & Kitchen',
-    'Sports & Outdoors',
-    'Books & Stationery',
-    'Beauty & Personal Care',
-    'Toys & Games',
-    'Automotive'
+    'Music',
+    'Home',
+    'Sports',
+    'Books',
+    'Beauty',
+    'Toys',
+    'Health'
   ];
 
   const handleSearch = () => {
@@ -132,14 +132,14 @@ const Navbar = () => {
       className="absolute top-full mt-0 left-0 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-2xl overflow-hidden animate-slideDown"
     >
       {categories.map((category, index) => (
-        <a
-          key={index}
-          href={`/category/${category.toLowerCase().replace(/\s&\s/g, '-').replace(/\s/g, '-')}`}
-          className="block px-5 py-3 text-gray-700 dark:text-gray-200 hover:bg-gradient-to-r hover:text-orange-500 transition-all duration-200 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:pl-6"
-        >
-          {category}
-        </a>
-      ))}
+  <a
+    key={index}
+    href={`/category/${category.toLowerCase()}`}  // ✅ Simple slug: /category/health
+    className="block px-5 py-3 text-gray-700 dark:text-gray-200 hover:bg-gradient-to-r hover:text-orange-500 transition-all duration-200 border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:pl-6"
+  >
+    {category}
+  </a>
+))}
     </div>
   )}
 </div>

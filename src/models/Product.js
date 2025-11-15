@@ -43,10 +43,10 @@ const ProductSchema = new mongoose.Schema({
   },
   badge: {
     type: String,
-    default: '',
+    required: true,
   },
 }, {
-  timestamps: true, // Adds createdAt and updatedAt
+  timestamps: true,
 });
 
 export default mongoose.models.Product || mongoose.model('Product', ProductSchema);

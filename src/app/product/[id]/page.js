@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import products from '@/data/products';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 
@@ -11,53 +10,34 @@ export default function ProductPage({ params }) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
   const [showToast, setShowToast] = useState(false);
-  const [productId, setProductId] = useState(null);
   const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);  // ✅ Added
 
-  // Unwrap params and find product
+  // ✅ Fetch product from database
   useEffect(() => {
-    const unwrapParams = async () => {
-      const resolvedParams = await params;
-      const id = parseInt(resolvedParams.id);
-      setProductId(id);
-      
-      const foundProduct = products.find(p => p.id === id);
-      setProduct(foundProduct);
-    };
+    async function fetchProduct() {
+      try {
+        const resolvedParams = await params;
+        const id = resolvedParams.id;
+        
+        // Fetch from API
+        const response = await fetch('/api/products');
+        const data = await response.json();
+        
+        if (data.success) {
+          // Find product by _id (MongoDB ID)
+          const foundProduct = data.products.find(p => p._id === id);
+          setProduct(foundProduct);
+        }
+      } catch (error) {
+        console.error('Error fetching product:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
     
-    unwrapParams();
+    fetchProduct();
   }, [params]);
-
-  // If still loading
-  if (product === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading product...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // If product not found
-  if (product === undefined) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Product Not Found
-          </h1>
-          <button
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-          >
-            Go Back Home
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-IN', {
@@ -77,7 +57,7 @@ export default function ProductPage({ params }) {
   };
 
   const increaseQuantity = () => {
-    if (quantity < product.stock) {
+    if (product && quantity < product.stock) {
       setQuantity(quantity + 1);
     }
   };
@@ -87,6 +67,37 @@ export default function ProductPage({ params }) {
       setQuantity(quantity - 1);
     }
   };
+
+  // ✅ Show loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading product...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If product not found
+  if (!product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            Product Not Found
+          </h1>
+          <button
+            onClick={() => router.push('/')}
+            className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+          >
+            Go Back Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
