@@ -8,12 +8,20 @@ const GOOGLE_CLIENT_ID = "1028953534432-aarvrfrl3h69e16saed41s9qod8q69vc.apps.go
 const SignInPage = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    name: ''
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    address: "",
+    city: "",
+    state: "",
+    pincode: "",
   });
+
   const [role, setRole] = useState(null);
+
+  const [location, setLocation] = useState(null);
+
   const router = useRouter();
 
   const handleGoogleCredentialResponse = async (response) => {
@@ -104,91 +112,121 @@ const initializeGoogleSignIn = () => {
   const handleSubmit = async (e) => {
   e.preventDefault();
 
-  if (isLogin) {
-    // LOGIN FLOW
-    if (!formData.email || !formData.password) {
-      alert("Please enter email and password.");
+  if (!isLogin) {
+    // SIGN UP FLOW
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.password ||
+      !formData.confirmPassword
+    ) {
+      alert("Please fill all fields.");
+      return;
+    }
+
+    if (!role) {
+      alert("Please choose Customer / Retailer / Wholesaler first.");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      alert("Passwords do not match.");
       return;
     }
 
     try {
-      const response = await fetch("http://localhost:5000/auth/login", {
+      const response = await fetch("http://localhost:5000/auth/signup", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          fullName: formData.name,
           email: formData.email,
           password: formData.password,
+          role,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          location, // { lat, lng } or null
         }),
       });
 
       const data = await response.json();
-
       if (!response.ok) {
-        alert(data.message || "Login failed.");
+        alert(data.message || "Sign up failed.");
         return;
       }
 
-      alert("Login successful!");
-      console.log("Logged in user:", data.user);
-      // Later: store token / user in context or localStorage, redirect based on role
-      // e.g., router.push("/");
-      return;
+      alert("Sign up successful! Please check your email for the OTP.");
+      router.push(
+        `/verify_otp?email=${encodeURIComponent(formData.email)}`
+      );
     } catch (err) {
-      console.error("Login error:", err);
+      console.error("Signup error:", err);
       alert("Something went wrong. Please try again.");
-      return;
     }
-  }
 
-  // SIGN UP FLOW (same as before, now below login branch)
-  if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
-    alert("Please fill all fields.");
     return;
   }
 
-  if (!role) {
-    alert("Please choose Customer / Retailer / Wholesaler first.");
-    return;
-  }
-
-  if (formData.password !== formData.confirmPassword) {
-    alert("Passwords do not match.");
+  // LOGIN FLOW (isLogin === true)
+  if (!formData.email || !formData.password) {
+    alert("Please enter email and password.");
     return;
   }
 
   try {
-    const response = await fetch("http://localhost:5000/auth/signup", {
+    const response = await fetch("http://localhost:5000/auth/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        fullName: formData.name,
         email: formData.email,
         password: formData.password,
-        role: role,
       }),
     });
 
     const data = await response.json();
-
     if (!response.ok) {
-      alert(data.message || "Sign up failed.");
+      alert(data.message || "Login failed.");
       return;
     }
 
-    alert("Sign up successful! Please check your email for the OTP.");
-console.log("Signup response:", data);
-
-// navigate to OTP page, passing email
-router.push(`/verify_otp?email=${encodeURIComponent(formData.email)}`);
-
+    alert("Login successful!");
+    console.log("Logged in user:", data.user);
+    // router.push("/");
   } catch (err) {
-    console.error("Signup error:", err);
+    console.error("Login error:", err);
     alert("Something went wrong. Please try again.");
   }
+};
+
+
+const handleUseMyLocation = () => {
+  if (!navigator.geolocation) {
+    alert("Geolocation is not supported by your browser.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      setLocation({ lat: latitude, lng: longitude });
+      alert("Location captured successfully.");
+    },
+    (err) => {
+      console.error("Geolocation error:", err);
+      if (err.code === 1) {
+        alert("Permission denied. Please allow location access or enter address manually.");
+      } else {
+        alert("Could not get your location. Please enter address manually.");
+      }
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 100000,
+      maximumAge: 0,
+    }
+  );
 };
 
 
@@ -294,24 +332,105 @@ router.push(`/verify_otp?email=${encodeURIComponent(formData.email)}`);
               />
             </div>
 
-            {/* Confirm Password field - only for sign up */}
+            {/* Extra fields - only for sign up */}
             {!isLogin && (
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password
-                </label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 bg-white/50 text-black placeholder-gray-600"
-                  placeholder="Enter Password"
-                  required
-                />
-              </div>
+              <>
+                {/* Confirm Password */}
+                <div>
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-300 bg-white/50 text-black placeholder-gray-600"
+                    placeholder="Enter Password"
+                    required
+                  />
+                </div>
+
+                {/* Address line */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    placeholder="House / street / area"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                  />
+                </div>
+
+                {/* City + State */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={formData.state}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* Pincode + Use my location */}
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode
+                    </label>
+                    <input
+                      type="text"
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleUseMyLocation}
+                    className="w-full px-3 py-2 border border-orange-400 text-orange-500 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors"
+                  >
+                    Use my location
+                  </button>
+                </div>
+
+                {location && (
+                  <p className="mt-1 text-xs text-green-600">
+                    Location captured (lat: {location.lat.toFixed(4)}, lng:{" "}
+                    {location.lng.toFixed(4)})
+                  </p>
+                )}
+              </>
             )}
+
 
             {/* Forgot password - only for login */}
             {isLogin && (

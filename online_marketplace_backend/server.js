@@ -37,7 +37,15 @@ async function startServer() {
     // REAL SIGNUP ROUTE (no OTP yet)
     app.post("/auth/signup", async (req, res) => {
   try {
-    const { fullName, email, password, role } = req.body;
+    const { fullName,
+      email,
+      password,
+      role,
+      address,
+      city,
+      state,
+      pincode,
+      location } = req.body;
 
     if (!fullName || !email || !password || !role) {
       return res.status(400).json({ message: "All fields are required." });
@@ -60,6 +68,11 @@ async function startServer() {
       password,
       role,
       isEmailVerified: false,
+      address: address || "",
+      city: city || "",
+      state: state || "",
+      pincode: pincode || "",
+      location: location || null,
     });
 
     await newUser.save();
