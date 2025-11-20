@@ -29,6 +29,17 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    location: {
+    lat: { type: Number },
+    lng: { type: Number },
+    },
+    address: {
+    type: String,
+    trim: true,
+    },
+    city: String,
+    state: String,
+    pincode: String,
     // ✅ New fields for Google OAuth
     authProvider: {
       type: String,
