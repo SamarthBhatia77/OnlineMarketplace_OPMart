@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+
+const GOOGLE_CLIENT_ID = "1028953534432-aarvrfrl3h69e16saed41s9qod8q69vc.apps.googleusercontent.com";
 
 const SignInPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,7 +13,102 @@ const SignInPage = () => {
     confirmPassword: '',
     name: ''
   });
+  const [role, setRole] = useState(null);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  const redirectBasedOnRole = (userRole) => {
+    if (userRole === 'wholesaler') {
+      router.push('/wholesaler');
+    } else if (userRole === 'retailer') {
+      router.push('/retailer');
+    } else {
+      router.push('/');
+    }
+  };
+
+  const handleGoogleCredentialResponse = async (response) => {
+    try {
+      const idToken = response.credential;
+
+      const res = await fetch("http://localhost:5000/auth/google", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken,
+          role: role,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "Google sign-in failed.");
+        return;
+      }
+
+      alert("Google sign-in successful!");
+      console.log("Google user:", data.user);
+      
+      // ✅ Store user data
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // ✅ Redirect based on role
+      redirectBasedOnRole(data.user.role);
+      
+    } catch (err) {
+      console.error("Google sign-in error:", err);
+      alert("Something went wrong with Google sign-in.");
+    }
+  };
+
+  const initializeGoogleSignIn = () => {
+    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredentialResponse,
+    });
+
+    const btn = document.getElementById("google-signin-btn");
+    if (btn) {
+      window.google.accounts.id.renderButton(btn, {
+        type: "standard",
+        shape: "pill",
+        theme: "outline",
+        text: "continue_with",
+        size: "large",
+        width: 240,
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Read selected portfolio when page loads
+    const selected = sessionStorage.getItem("selectedPortfolio");
+    if (selected) {
+      setRole(selected);
+    }
+
+    // Load Google script if not already present
+    const existingScript = document.getElementById("google-client-script");
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.id = "google-client-script";
+      script.onload = initializeGoogleSignIn;
+      document.body.appendChild(script);
+    } else {
+      initializeGoogleSignIn();
+    }
+  }, []);
 
   const handleInputChange = (e) => {
     setFormData({
@@ -20,16 +117,105 @@ const SignInPage = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+
     if (isLogin) {
-      // Handle login logic
-      console.log('Login:', { email: formData.email, password: formData.password });
-      router.push('/');
-    } else {
-      // Handle sign up logic
-      console.log('Sign Up:', formData);
-      router.push('/');
+      // LOGIN FLOW
+      if (!formData.email || !formData.password) {
+        alert("Please enter email and password.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("http://localhost:5000/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Login failed.");
+          setLoading(false);
+          return;
+        }
+
+        alert("Login successful!");
+        console.log("Logged in user:", data.user);
+        
+        // ✅ Store user data and token
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // ✅ Redirect based on role
+        redirectBasedOnRole(data.user.role);
+        
+      } catch (err) {
+        console.error("Login error:", err);
+        alert("Something went wrong. Please try again.");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // SIGN UP FLOW
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+      alert("Please fill all fields.");
+      setLoading(false);
+      return;
+    }
+
+    if (!role) {
+      alert("Please choose Customer / Retailer / Wholesaler first.");
+      setLoading(false);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      alert("Passwords do not match.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:5000/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fullName: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: role,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Sign up failed.");
+        setLoading(false);
+        return;
+      }
+
+      alert("Sign up successful! Please check your email for the OTP.");
+      console.log("Signup response:", data);
+
+      router.push(`/verify_otp?email=${encodeURIComponent(formData.email)}`);
+    } catch (err) {
+      console.error("Signup error:", err);
+      alert("Something went wrong. Please try again.");
+      setLoading(false);
     }
   };
 
@@ -59,6 +245,7 @@ const SignInPage = () => {
           <div className="flex mb-6 bg-gray-100 rounded-full p-1">
             <button
               onClick={() => setIsLogin(true)}
+              disabled={loading}
               className={`flex-1 py-2 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
                 isLogin
                   ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
@@ -69,6 +256,7 @@ const SignInPage = () => {
             </button>
             <button
               onClick={() => setIsLogin(false)}
+              disabled={loading}
               className={`flex-1 py-2 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
                 !isLogin
                   ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
@@ -166,9 +354,20 @@ const SignInPage = () => {
             {/* Submit button */}
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLogin ? 'Log In' : 'Sign Up'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {isLogin ? 'Logging in...' : 'Signing up...'}
+                </span>
+              ) : (
+                isLogin ? 'Log In' : 'Sign Up'
+              )}
             </button>
           </form>
 
@@ -183,23 +382,8 @@ const SignInPage = () => {
           </div>
 
           {/* Social login buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-300">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115Z"/>
-                <path fill="#34A853" d="M16.04 18.013c-1.09.703-2.474 1.078-4.04 1.078a7.077 7.077 0 0 1-6.723-4.823l-4.04 3.067A11.965 11.965 0 0 0 12 24c2.933 0 5.735-1.043 7.834-3l-3.793-2.987Z"/>
-                <path fill="#4A90E2" d="M19.834 21c2.195-2.048 3.62-5.096 3.62-9 0-.71-.109-1.473-.272-2.182H12v4.637h6.436c-.317 1.559-1.17 2.766-2.395 3.558L19.834 21Z"/>
-                <path fill="#FBBC05" d="M5.277 14.268A7.12 7.12 0 0 1 4.909 12c0-.782.125-1.533.357-2.235L1.24 6.65A11.934 11.934 0 0 0 0 12c0 1.92.445 3.73 1.237 5.335l4.04-3.067Z"/>
-              </svg>
-              <span className="text-sm font-medium text-gray-700">Google</span>
-            </button>
-            
-            <button className="flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all duration-300">
-              <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-              </svg>
-              <span className="text-sm font-medium text-gray-700">Facebook</span>
-            </button>
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <div id="google-signin-btn"></div>
           </div>
 
           {/* Terms */}
@@ -215,7 +399,8 @@ const SignInPage = () => {
         <div className="text-center mt-6">
           <button
             onClick={() => router.push('/')}
-            className="text-gray-600 mb-8 hover:text-orange-600 text-sm font-medium flex items-center justify-center gap-2 mx-auto transition-colors duration-300"
+            disabled={loading}
+            className="text-gray-600 mb-8 hover:text-orange-600 text-sm font-medium flex items-center justify-center gap-2 mx-auto transition-colors duration-300 disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -225,7 +410,7 @@ const SignInPage = () => {
         </div>
       </div>
 
-      {/* Animation styles - FASTER & MORE MOVEMENT */}
+      {/* Animation styles */}
       <style jsx>{`
         @keyframes blob {
           0%, 100% {
