@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState,  useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const GOOGLE_CLIENT_ID = "1028953534432-aarvrfrl3h69e16saed41s9qod8q69vc.apps.googleusercontent.com";
@@ -22,65 +22,81 @@ const SignInPage = () => {
 
   const [location, setLocation] = useState(null);
 
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const redirectBasedOnRole = (userRole) => {
+    if (userRole === 'wholesaler') {
+      router.push('/wholesaler');
+    } else if (userRole === 'retailer') {
+      router.push('/retailer');
+    } else {
+      router.push('/');
+    }
+  };
+
   const handleGoogleCredentialResponse = async (response) => {
-  try {
-    const idToken = response.credential;
+    try {
+      const idToken = response.credential;
 
-    const res = await fetch("http://localhost:5000/auth/google", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        idToken,
-        role: role, // may be null; backend defaults to "customer"
-      }),
-    });
+      const res = await fetch("http://localhost:5000/auth/google", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken,
+          role: role,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      alert(data.message || "Google sign-in failed.");
+      if (!res.ok) {
+        alert(data.message || "Google sign-in failed.");
+        return;
+      }
+
+      alert("Google sign-in successful!");
+      console.log("Google user:", data.user);
+      
+      // ✅ Store user data
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // ✅ Redirect based on role
+      redirectBasedOnRole(data.user.role);
+      
+    } catch (err) {
+      console.error("Google sign-in error:", err);
+      alert("Something went wrong with Google sign-in.");
+    }
+  };
+
+  const initializeGoogleSignIn = () => {
+    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
       return;
     }
 
-    alert("Google sign-in successful!");
-    console.log("Google user:", data.user);
-    // later: redirect based on data.user.role
-    // router.push("/");
-  } catch (err) {
-    console.error("Google sign-in error:", err);
-    alert("Something went wrong with Google sign-in.");
-  }
-};
-
-const initializeGoogleSignIn = () => {
-  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-    return;
-  }
-
-  window.google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleGoogleCredentialResponse,
-  });
-
-  // Render into your existing Google button container
-  const btn = document.getElementById("google-signin-btn");
-  if (btn) {
-    window.google.accounts.id.renderButton(btn, {
-      type: "standard",
-      shape: "pill",
-      theme: "outline",
-      text: "continue_with",
-      size: "large",
-      width: 240,
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredentialResponse,
     });
-  }
-};
 
-   useEffect(() => {
+    const btn = document.getElementById("google-signin-btn");
+    if (btn) {
+      window.google.accounts.id.renderButton(btn, {
+        type: "standard",
+        shape: "pill",
+        theme: "outline",
+        text: "continue_with",
+        size: "large",
+        width: 240,
+      });
+    }
+  };
+
+  useEffect(() => {
     // Read selected portfolio when page loads
     const selected = sessionStorage.getItem("selectedPortfolio");
     if (selected) {
@@ -88,18 +104,18 @@ const initializeGoogleSignIn = () => {
     }
 
     // Load Google script if not already present
-  const existingScript = document.getElementById("google-client-script");
-  if (!existingScript) {
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.id = "google-client-script";
-    script.onload = initializeGoogleSignIn;
-    document.body.appendChild(script);
-  } else {
-    initializeGoogleSignIn();
-  }
+    const existingScript = document.getElementById("google-client-script");
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.id = "google-client-script";
+      script.onload = initializeGoogleSignIn;
+      document.body.appendChild(script);
+    } else {
+      initializeGoogleSignIn();
+    }
   }, []);
 
   const handleInputChange = (e) => {
@@ -110,7 +126,67 @@ const initializeGoogleSignIn = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
+    setLoading(true);
+
+    if (isLogin) {
+      // LOGIN FLOW
+      if (!formData.email || !formData.password) {
+        alert("Please enter email and password.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("http://localhost:5000/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.message || "Login failed.");
+          setLoading(false);
+          return;
+        }
+
+        alert("Login successful!");
+        console.log("Logged in user:", data.user);
+        
+        // ✅ Store user data and token
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // ✅ Redirect based on role
+        redirectBasedOnRole(data.user.role);
+        
+      } catch (err) {
+        console.error("Login error:", err);
+        alert("Something went wrong. Please try again.");
+        setLoading(false);
+      }
+      return;
+    }
+
+    // SIGN UP FLOW
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+      alert("Please fill all fields.");
+      setLoading(false);
+      return;
+    }
+
+    if (!role) {
+      alert("Please choose Customer / Retailer / Wholesaler first.");
+      setLoading(false);
+      return;
+    }
 
   if (!isLogin) {
     // SIGN UP FLOW
@@ -129,8 +205,10 @@ const initializeGoogleSignIn = () => {
       return;
     }
 
+  
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match.");
+      setLoading(false);
       return;
     }
 
@@ -148,12 +226,14 @@ const initializeGoogleSignIn = () => {
           state: formData.state,
           pincode: formData.pincode,
           location, // { lat, lng } or null
+        
         }),
       });
 
       const data = await response.json();
       if (!response.ok) {
         alert(data.message || "Sign up failed.");
+        setLoading(false);
         return;
       }
 
@@ -193,13 +273,18 @@ const initializeGoogleSignIn = () => {
 
     alert("Login successful!");
     console.log("Logged in user:", data.user);
+    router.push(`/verify_otp?email=${encodeURIComponent(formData.email)}`);
     // router.push("/");
   } catch (err) {
     console.error("Login error:", err);
     alert("Something went wrong. Please try again.");
+    setLoading(false);
   }
 };
 
+     
+
+      
 
 const handleUseMyLocation = () => {
   if (!navigator.geolocation) {
@@ -256,6 +341,7 @@ const handleUseMyLocation = () => {
           <div className="flex mb-6 bg-gray-100 rounded-full p-1">
             <button
               onClick={() => setIsLogin(true)}
+              disabled={loading}
               className={`flex-1 py-2 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
                 isLogin
                   ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
@@ -266,6 +352,7 @@ const handleUseMyLocation = () => {
             </button>
             <button
               onClick={() => setIsLogin(false)}
+              disabled={loading}
               className={`flex-1 py-2 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
                 !isLogin
                   ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
@@ -444,9 +531,20 @@ const handleUseMyLocation = () => {
             {/* Submit button */}
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLogin ? 'Log In' : 'Sign Up'}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  {isLogin ? 'Logging in...' : 'Signing up...'}
+                </span>
+              ) : (
+                isLogin ? 'Log In' : 'Sign Up'
+              )}
             </button>
           </form>
 
@@ -465,7 +563,6 @@ const handleUseMyLocation = () => {
             <div id="google-signin-btn"></div>
           </div>
 
-
           {/* Terms */}
           <p className="text-xs text-center text-gray-500 mt-6">
             By continuing, you agree to OOPMart's{' '}
@@ -479,7 +576,8 @@ const handleUseMyLocation = () => {
         <div className="text-center mt-6">
           <button
             onClick={() => router.push('/')}
-            className="text-gray-600 mb-8 hover:text-orange-600 text-sm font-medium flex items-center justify-center gap-2 mx-auto transition-colors duration-300"
+            disabled={loading}
+            className="text-gray-600 mb-8 hover:text-orange-600 text-sm font-medium flex items-center justify-center gap-2 mx-auto transition-colors duration-300 disabled:opacity-50"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -489,7 +587,7 @@ const handleUseMyLocation = () => {
         </div>
       </div>
 
-      {/* Animation styles - FASTER & MORE MOVEMENT */}
+      {/* Animation styles */}
       <style jsx>{`
         @keyframes blob {
           0%, 100% {

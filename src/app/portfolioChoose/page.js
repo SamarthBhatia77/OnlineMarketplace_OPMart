@@ -1,10 +1,20 @@
 'use client';
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const PortfolioChoosePage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [selectedRole, setSelectedRole] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Clear any existing login when landing on this page
+  useEffect(() => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('selectedPortfolio');
+  }, []);
 
   const portfolios = [
     {
@@ -43,8 +53,11 @@ const PortfolioChoosePage = () => {
   ];
 
   const handlePortfolioSelect = (portfolioId) => {
-    // Store selected portfolio in session/local storage if needed
+    if (loading) return;
+    
+    // Store selected role
     sessionStorage.setItem('selectedPortfolio', portfolioId);
+    
     // Navigate to sign in page
     router.push('/signin');
   };

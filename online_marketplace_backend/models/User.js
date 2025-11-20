@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true, // for now, we’ll require it (Google users later can skip)
+      required: false, // ✅ Changed to false - Google users don't have password
     },
     role: {
       type: String,
@@ -40,13 +40,25 @@ const userSchema = new mongoose.Schema(
     city: String,
     state: String,
     pincode: String,
+    // ✅ New fields for Google OAuth
+    authProvider: {
+      type: String,
+      enum: ["email", "google"],
+      default: "email",
+    },
+    googleId: {
+      type: String,
+      sparse: true, // Allows multiple null values but unique non-null values
+      unique: true,
+    },
   },
   { timestamps: true }
 );
 
 // 2) Before saving user, hash (scramble) the password if it was changed
 userSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) {
+  // ✅ Only hash password if it exists and was modified
+  if (!this.password || !this.isModified("password")) {
     return next();
   }
 
@@ -62,10 +74,14 @@ userSchema.pre("save", async function (next) {
 
 // 3) Method to check password during login
 userSchema.methods.checkPassword = async function (plainPassword) {
+  // ✅ Check if password exists (Google users won't have one)
+  if (!this.password) {
+    return false;
+  }
   return bcrypt.compare(plainPassword, this.password);
 };
 
-// 4) Create the model
-const User = mongoose.model("User", userSchema);
+// 4) Create the model (check if it already exists to avoid re-compilation)
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 export default User;
