@@ -43,29 +43,49 @@ const WholesalerPage = () => {
   // Quantity options
   const quantityOptions = [100, 300, 500, 1000, 5000];
 
-  // Check authentication and role
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    
-    if (!userStr) {
-      router.push('/signin');
-      return;
+  // 1. First useEffect — sets user when page loads (already exists)
+useEffect(() => {
+  const userStr = localStorage.getItem('user');
+  
+  if (!userStr) {
+    router.push('/signin');
+    return;
+  }
+  
+  const userData = JSON.parse(userStr);
+  
+  if (userData.role !== 'wholesaler') {
+    if (userData.role === 'retailer') {
+      router.push('/retailer');
+    } else {
+      router.push('/');
     }
-    
-    const userData = JSON.parse(userStr);
-    
-    if (userData.role !== 'wholesaler') {
-      if (userData.role === 'retailer') {
-        router.push('/retailer');
+    return;
+  }
+  
+  setUser(userData);
+  setLoading(false);
+}, [router]);
+
+// 2. Second useEffect — fetches items when user is set (add this new code)
+useEffect(() => {
+  if (!user || !user.id) return;
+  const fetchItems = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/wprods/${user.id}`);
+      const data = await res.json();
+      if (res.ok) {
+        setItems(data.items || []);
       } else {
-        router.push('/');
+        console.error("Failed to fetch items:", data.message);
       }
-      return;
+    } catch (err) {
+      console.error("Error fetching items:", err);
     }
-    
-    setUser(userData);
-    setLoading(false);
-  }, [router]);
+  };
+  fetchItems();
+}, [user]);
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -92,22 +112,56 @@ const WholesalerPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    console.log('Form data:', formData);
-    alert('Product will be added when backend is connected!');
-    
+  e.preventDefault();
+  if (!user) return;
+
+  if (!imagePreview) {
+    alert("Please select an image");
+    return;
+  }
+
+  try {
+    const res = await fetch("http://localhost:5000/wprods/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wholesalerId: user.id || user._id,
+        productName: formData.productName,
+        description: formData.description,
+        sellingPrice: formData.sellingPrice,
+        numberOfItems: formData.numberOfItems,
+        category: formData.category,
+        base64Image: imagePreview,   // data URL from FileReader
+      }),
+    });
+
+    const data = await res.json();
+    console.log("Create product response:", res.status, data);
+
+    if (!res.ok) {
+      alert(data.message || "Failed to add item");
+      return;
+    }
+
+    setItems((prev) => [data.item, ...prev]);
+    alert("Product added successfully!");
+
     setShowAddItemForm(false);
     setFormData({
-      productName: '',
-      description: '',
-      sellingPrice: '',
-      numberOfItems: '',
-      category: '',
-      image: null
+      productName: "",
+      description: "",
+      sellingPrice: "",
+      numberOfItems: "",
+      category: "",
+      image: null,
     });
     setImagePreview(null);
-  };
+  } catch (err) {
+    console.error("Create item error:", err);
+    alert("Something went wrong while adding the item");
+  }
+};
+
 
   const closeForm = () => {
     setShowAddItemForm(false);
@@ -188,10 +242,32 @@ const WholesalerPage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Items will be displayed here */}
-          </div>
-        )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {items.map((item) => (
+                  <div key={item._id} className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col">
+                    <div className="relative h-56 w-full bg-gray-800">
+                      <Image
+                        src={item.image}
+                        alt={item.productName}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="p-4 flex flex-col gap-2 flex-1">
+                      <h3 className="text-lg font-semibold text-white">{item.productName}</h3>
+                      <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
+                      <p className="text-xs text-orange-400 mt-1">Category: {item.category}</p>
+                      <div className="mt-auto flex items-center justify-between pt-2">
+                        <div>
+                          <p className="text-orange-400 font-bold text-lg">₹{Number(item.sellingPrice).toLocaleString()}</p>
+                          <p className="text-xs text-gray-400">Qty: {Number(item.numberOfItems).toLocaleString()} units</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
       </div>
 
       {/* Add Item Modal/Form */}
