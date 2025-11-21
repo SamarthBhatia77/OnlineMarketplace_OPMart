@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from "express";
 import mongoose from "mongoose";
 import { MONGODB_URI } from "./config.js";
@@ -5,6 +8,10 @@ import User from "./models/User.js";
 import cors from "cors";
 import Otp from "./models/Otp.js";
 import WProd from "./models/WProd.js";
+
+console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
+
+
 import cloudinary from "./cloudinary.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
@@ -288,7 +295,7 @@ app.post("/wprods/create", async (req, res) => {
       base64Image,
     } = req.body;
 
-    console.log("CREATE /wprods/create body:", req.body);  // 👈 add this
+    console.log("CREATE /wprods/create body:", req.body);
 
     if (
       !wholesalerId ||
@@ -304,12 +311,30 @@ app.post("/wprods/create", async (req, res) => {
         .json({ message: "Missing required fields." });
     }
 
-    // ... rest unchanged ...
+    // 1. Upload image to Cloudinary
+    const uploadRes = await cloudinary.uploader.upload(base64Image, {
+      folder: "oopmart-wprods",
+    });
+
+    // 2. Actually create and save the product in MongoDB (IMPORTANT!)
+    const newItem = await WProd.create({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice,
+      numberOfItems,
+      category,
+      image: uploadRes.secure_url, // Only store the Cloudinary URL
+    });
+
+    // 3. Respond with the new item
+    return res.status(201).json({ item: newItem });
   } catch (err) {
-    console.error("Error in /wprods/create:", err);        // 👈 keep full error
+    console.error("Error in /wprods/create:", err);
     return res.status(500).json({ message: "Server error." });
   }
 });
+
 
 app.get("/wprods/:wholesalerId", async (req, res) => {
   try {
