@@ -21,3 +21,4 @@ const WProd =
   mongoose.models.WProd || mongoose.model("WProd", WProdSchema);
 
 export default WProd;
+
