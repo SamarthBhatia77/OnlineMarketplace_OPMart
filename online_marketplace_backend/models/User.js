@@ -40,6 +40,11 @@ const userSchema = new mongoose.Schema(
     city: String,
     state: String,
     pincode: String,
+    accountBalance: {    //To be used in Payments
+    type: Number,
+    default: 0,
+    required: true
+    },
     // ✅ New fields for Google OAuth
     authProvider: {
       type: String,

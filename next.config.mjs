@@ -12,11 +12,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'source.unsplash.com', // ✅ Add this
+        hostname: 'source.unsplash.com',
       },
       {
         protocol: 'https',
-        hostname: 'images.unsplash.com', // ✅ Add this
+        hostname: 'images.unsplash.com',
       },
       {
         protocol: 'https',
@@ -24,7 +24,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'res.cloudinary.com',
+        hostname: 'ik.imagekit.io',  // <--- Added this line!
       },
     ],
   },

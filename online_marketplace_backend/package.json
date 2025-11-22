@@ -16,6 +16,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "google-auth-library": "^10.5.0",
+    "imagekit": "^6.0.0",
     "mongoose": "^8.19.4",
     "nodemailer": "^7.0.10"
   }
