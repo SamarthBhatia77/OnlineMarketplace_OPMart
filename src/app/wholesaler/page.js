@@ -243,30 +243,47 @@ useEffect(() => {
           </div>
         ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {items.map((item) => (
-                  <div key={item._id} className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col">
-                    <div className="relative h-56 w-full bg-gray-800">
-                      <Image
-                        src={item.image}
-                        alt={item.productName}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="p-4 flex flex-col gap-2 flex-1">
-                      <h3 className="text-lg font-semibold text-white">{item.productName}</h3>
-                      <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
-                      <p className="text-xs text-orange-400 mt-1">Category: {item.category}</p>
-                      <div className="mt-auto flex items-center justify-between pt-2">
-                        <div>
-                          <p className="text-orange-400 font-bold text-lg">₹{Number(item.sellingPrice).toLocaleString()}</p>
-                          <p className="text-xs text-gray-400">Qty: {Number(item.numberOfItems).toLocaleString()} units</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+  {items.map((item) => (
+    <div
+      key={item._id}
+      className="bg-gray-50 dark:bg-[#181a20] rounded-2xl shadow-xl overflow-hidden flex flex-col min-h-[340px] transition-all duration-300
+        border-2 border-transparent hover:border-orange-500
+        hover:shadow-orange-400/10 group cursor-pointer"
+    >
+      <div className="relative h-56 w-full bg-gray-200 dark:bg-gray-800">
+        {/* Category badge */}
+        <span className="absolute top-3 left-3 z-10 bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow">
+          {item.category}
+        </span>
+        <Image
+          src={item.image}
+          alt={item.productName}
+          fill
+          className="object-cover"
+        />
+      </div>
+      <div className="p-4 flex flex-col gap-2 flex-1">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white transition-colors group-hover:text-orange-500">
+          {item.productName}
+        </h3>
+        <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2">{item.description}</p>
+        <p className="text-xs text-orange-500 mt-1">Category: {item.category}</p>
+        <div className="mt-auto flex items-center justify-between pt-2">
+          <div>
+            <p className="text-orange-500 font-bold text-lg">
+              ₹{Number(item.sellingPrice).toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-700 dark:text-gray-400">
+              Qty: {Number(item.numberOfItems).toLocaleString()} units
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  ))}
+</div>
+
+
             )}
       </div>
 

@@ -355,6 +355,16 @@ app.get("/wprods/:wholesalerId", async (req, res) => {
   }
 });
 
+app.get("/wprods", async (req, res) => {
+  try {
+    const items = await WProd.find({}).sort({ createdAt: -1 });
+    return res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error in GET /wprods", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
 
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
