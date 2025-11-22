@@ -6,6 +6,8 @@ import Image from 'next/image';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 
+
+
 const WholesalerPage = () => {
   const router = useRouter();
   const [showAddItemForm, setShowAddItemForm] = useState(false);
@@ -21,7 +23,8 @@ const WholesalerPage = () => {
     sellingPrice: '',
     numberOfItems: '',
     category: '',
-    image: null
+    image: null,
+    imageBase64: "",
   });
 
   // Same categories as navbar
@@ -43,35 +46,38 @@ const WholesalerPage = () => {
   // Quantity options
   const quantityOptions = [100, 300, 500, 1000, 5000];
 
-  // 1. First useEffect — sets user when page loads (already exists)
-useEffect(() => {
-  const userStr = localStorage.getItem('user');
-  
-  if (!userStr) {
-    router.push('/signin');
-    return;
-  }
-  
-  const userData = JSON.parse(userStr);
-  
-  if (userData.role !== 'wholesaler') {
-    if (userData.role === 'retailer') {
-      router.push('/retailer');
-    } else {
-      router.push('/');
+  // Check authentication and role
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    
+    if (!userStr) {
+      router.push('/signin');
+      return;
     }
-    return;
-  }
-  
-  setUser(userData);
-  setLoading(false);
-}, [router]);
+    
+    const userData = JSON.parse(userStr);
+    
+    if (userData.role !== 'wholesaler') {
+      if (userData.role === 'retailer') {
+        router.push('/retailer');
+      } else {
+        router.push('/');
+      }
+      return;
+    }
+    
+    setUser(userData);
+    setLoading(false);
+  }, [router]);
 
-// 2. Second useEffect — fetches items when user is set (add this new code)
+
+  
+  // Fetch all items for this wholesaler
+// Fetch all items for this wholesaler
 useEffect(() => {
-  if (!user || !user.id) return;
   const fetchItems = async () => {
     try {
+      if (!user || !user.id) return;   // prevent wrong fetch
       const res = await fetch(`http://localhost:5000/wprods/${user.id}`);
       const data = await res.json();
       if (res.ok) {
@@ -83,8 +89,13 @@ useEffect(() => {
       console.error("Error fetching items:", err);
     }
   };
-  fetchItems();
+
+  if (user && user.id) {
+    fetchItems();
+  }
 }, [user]);
+
+
 
 
   const handleInputChange = (e) => {
@@ -96,26 +107,37 @@ useEffect(() => {
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const file = e.target.files[0];
+  if (file) {
+    setFormData(prev => ({
+      ...prev,
+      image: file,
+    }));
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result; // data:image/...;base64,...
+      setImagePreview(base64);
       setFormData(prev => ({
         ...prev,
-        image: file
+        imageBase64: base64,
       }));
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+
+  
 
   const handleSubmit = async (e) => {
+    console.log("handleSubmit fired");
   e.preventDefault();
   if (!user) return;
 
-  if (!imagePreview) {
+  console.log("Submitting formData:", formData, "user:", user); // 👈
+
+  if (!formData.imageBase64) {
     alert("Please select an image");
     return;
   }
@@ -125,26 +147,27 @@ useEffect(() => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        wholesalerId: user.id || user._id,
+        wholesalerId: user.id || user._id,  // 👈 ensure correct field
         productName: formData.productName,
         description: formData.description,
         sellingPrice: formData.sellingPrice,
         numberOfItems: formData.numberOfItems,
         category: formData.category,
-        base64Image: imagePreview,   // data URL from FileReader
+        base64Image: formData.imageBase64,
       }),
     });
+    // ...
+
 
     const data = await res.json();
-    console.log("Create product response:", res.status, data);
 
     if (!res.ok) {
       alert(data.message || "Failed to add item");
       return;
     }
 
+    // Add the new item to the grid immediately
     setItems((prev) => [data.item, ...prev]);
-    alert("Product added successfully!");
 
     setShowAddItemForm(false);
     setFormData({
@@ -154,6 +177,7 @@ useEffect(() => {
       numberOfItems: "",
       category: "",
       image: null,
+      imageBase64: "",
     });
     setImagePreview(null);
   } catch (err) {
@@ -161,6 +185,7 @@ useEffect(() => {
     alert("Something went wrong while adding the item");
   }
 };
+
 
 
   const closeForm = () => {
@@ -222,52 +247,79 @@ useEffect(() => {
         </div>
 
         {items.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="mb-8">
-              <svg className="w-24 h-24 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-              </svg>
+  <div className="text-center py-20">
+    <div className="mb-8">
+      <svg
+        className="w-24 h-24 mx-auto text-gray-400"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+        />
+      </svg>
+    </div>
+    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+      No Items Yet
+    </h3>
+    <p className="text-gray-600 dark:text-gray-400 mb-8">
+      Get started by adding your first item to sell
+    </p>
+    <button
+      onClick={() => setShowAddItemForm(true)}
+      className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition-all duration-300"
+    >
+      Add Your First Item
+    </button>
+  </div>
+) : (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    {items.map((item) => (
+      <div
+        key={item._id}
+        className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col"
+      >
+        <div className="relative h-56 w-full bg-gray-800">
+          <Image
+            src={item.image}
+            alt={item.productName}
+            fill
+            className="object-cover"
+          />
+        </div>
+
+        <div className="p-4 flex flex-col gap-2 flex-1">
+          <h3 className="text-lg font-semibold text-white">
+            {item.productName}
+          </h3>
+          <p className="text-sm text-gray-400 line-clamp-2">
+            {item.description}
+          </p>
+
+          <p className="text-xs text-orange-400 mt-1">
+            Category: {item.category}
+          </p>
+
+          <div className="mt-auto flex items-center justify-between pt-2">
+            <div>
+              <p className="text-orange-400 font-bold text-lg">
+                ₹{Number(item.sellingPrice).toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-400">
+                Qty: {Number(item.numberOfItems).toLocaleString()} units
+              </p>
             </div>
-            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-              No Items Yet
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-8">
-              Get started by adding your first item to sell
-            </p>
-            <button
-              onClick={() => setShowAddItemForm(true)}
-              className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition-all duration-300"
-            >
-              Add Your First Item
-            </button>
           </div>
-        ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {items.map((item) => (
-                  <div key={item._id} className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col">
-                    <div className="relative h-56 w-full bg-gray-800">
-                      <Image
-                        src={item.image}
-                        alt={item.productName}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="p-4 flex flex-col gap-2 flex-1">
-                      <h3 className="text-lg font-semibold text-white">{item.productName}</h3>
-                      <p className="text-sm text-gray-400 line-clamp-2">{item.description}</p>
-                      <p className="text-xs text-orange-400 mt-1">Category: {item.category}</p>
-                      <div className="mt-auto flex items-center justify-between pt-2">
-                        <div>
-                          <p className="text-orange-400 font-bold text-lg">₹{Number(item.sellingPrice).toLocaleString()}</p>
-                          <p className="text-xs text-gray-400">Qty: {Number(item.numberOfItems).toLocaleString()} units</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
       </div>
 
       {/* Add Item Modal/Form */}

@@ -31,7 +31,7 @@ const SignInPage = () => {
     } else if (userRole === 'retailer') {
       router.push('/retailer');
     } else {
-      router.push('/');
+      router.push('/customer');
     }
   };
 

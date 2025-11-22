@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 import express from "express";
@@ -12,7 +12,7 @@ import WProd from "./models/WProd.js";
 //console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
 
-import { uploadToImageKit } from "./imagekit.js";
+//import cloudinary from "./cloudinary.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -21,17 +21,12 @@ const GOOGLE_CLIENT_ID =
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const app = express();
-
 app.use(
   cors({
     origin: "http://localhost:3000",
   })
 );
-
-// Allow larger JSON & URL-encoded payloads (e.g. base64 images)
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-
+app.use(express.json());
 
 const PORT = 5000;
 
@@ -300,6 +295,8 @@ app.post("/wprods/create", async (req, res) => {
       base64Image,
     } = req.body;
 
+    console.log("CREATE /wprods/create body:", req.body);
+
     if (
       !wholesalerId ||
       !productName ||
@@ -309,18 +306,17 @@ app.post("/wprods/create", async (req, res) => {
       !category ||
       !base64Image
     ) {
-      return res.status(400).json({ message: "Missing required fields." });
+      return res
+        .status(400)
+        .json({ message: "Missing required fields." });
     }
 
-    // Upload image to ImageKit and get the image URL.
-    let imageUrl;
-    try {
-      imageUrl = await uploadToImageKit(base64Image, productName.replace(/\s/g, "_").slice(0,20));
-    } catch (err) {
-      return res.status(500).json({ message: "Image upload failed: " + err.message });
-    }
+    // 1. Upload image to Cloudinary
+    const uploadRes = await cloudinary.uploader.upload(base64Image, {
+      folder: "oopmart-wprods",
+    });
 
-    // Save product to MongoDB
+    // 2. Actually create and save the product in MongoDB (IMPORTANT!)
     const newItem = await WProd.create({
       wholesalerId,
       productName,
@@ -328,16 +324,16 @@ app.post("/wprods/create", async (req, res) => {
       sellingPrice,
       numberOfItems,
       category,
-      image: imageUrl,  // Now stores ImageKit CDN URL
+      image: uploadRes.secure_url, // Only store the Cloudinary URL
     });
 
+    // 3. Respond with the new item
     return res.status(201).json({ item: newItem });
   } catch (err) {
     console.error("Error in /wprods/create:", err);
     return res.status(500).json({ message: "Server error." });
   }
 });
-
 
 
 app.get("/wprods/:wholesalerId", async (req, res) => {
@@ -351,6 +347,16 @@ app.get("/wprods/:wholesalerId", async (req, res) => {
     return res.status(200).json({ items });
   } catch (err) {
     console.error("Error in GET /wprods/:wholesalerId:", err); // 👈 full error
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+app.get("/wprods", async (req, res) => {
+  try {
+    const items = await WProd.find({}).sort({ createdAt: -1 });
+    return res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error in GET /wprods", err);
     return res.status(500).json({ message: "Server error." });
   }
 });
