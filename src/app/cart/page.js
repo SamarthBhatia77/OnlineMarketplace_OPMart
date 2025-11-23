@@ -21,9 +21,16 @@ const CartPage = () => {
   const [filteredCartItems, setFilteredCartItems] = useState([]);
   const [productRatings, setProductRatings] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Buy modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalItem, setModalItem] = useState(null);
   const [modalQty, setModalQty] = useState(1);
+  
+  // Delete modal
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteItem, setDeleteItem] = useState(null);
+  
   const [loading, setLoading] = useState(true);
 
   const router = useRouter();
@@ -86,7 +93,7 @@ const CartPage = () => {
       );
     }
 
-    // Then filter by search query (search in the rprodId object)
+    // Then filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(item => {
@@ -103,11 +110,42 @@ const CartPage = () => {
     setFilteredCartItems(filtered);
   }, [selectedCategory, cartItems, searchQuery]);
 
-  // Modal open
+  // Modal open (Buy)
   const openModal = (item) => {
     setModalItem(item);
     setModalQty(item.quantity || 1);
     setModalOpen(true);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (item, e) => {
+    e.stopPropagation();
+    setDeleteItem(item);
+    setDeleteModalOpen(true);
+  };
+
+  // Handle delete from cart
+  const handleDeleteFromCart = async () => {
+    if (!deleteItem) return;
+
+    try {
+      const res = await fetch(`http://localhost:5000/cart/${deleteItem._id}`, {
+        method: 'DELETE'
+      });
+
+      if (res.ok) {
+        // Remove from UI
+        setCartItems(prev => prev.filter(item => item._id !== deleteItem._id));
+        setDeleteModalOpen(false);
+        setDeleteItem(null);
+        alert('Item removed from cart!');
+      } else {
+        alert('Failed to remove item from cart.');
+      }
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      alert('Error removing item from cart.');
+    }
   };
 
   // Register purchase in cprods
@@ -158,7 +196,6 @@ const CartPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {/* View Purchases Button and Category/Search Filter */}
         <div className="flex justify-between items-center mb-6">
-          {/* Show active filter or search status */}
           <div>
             {selectedCategory ? (
               <div className="flex items-center gap-3">
@@ -243,6 +280,22 @@ const CartPage = () => {
                 }}
                 onClick={() => openModal(item)}
               >
+                {/* Delete Icon - Top Right */}
+                <button
+                  onClick={(e) => openDeleteModal(item, e)}
+                  className="absolute top-4 right-4 z-20 bg-red-500 hover:bg-red-600 text-white rounded-full p-2 transition-all shadow-lg hover:shadow-xl"
+                  title="Remove from cart"
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-5 w-5" 
+                    viewBox="0 0 20 20" 
+                    fill="currentColor"
+                  >
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
+
                 {/* Category sticker */}
                 <div
                   className="relative rounded-t-3xl flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-6"
@@ -268,7 +321,7 @@ const CartPage = () => {
 
                 {/* Card Body */}
                 <div className="flex flex-col flex-1 px-6 pb-4 bg-white dark:bg-gray-800 rounded-b-3xl">
-                  {/* Title - Fixed height with line clamp */}
+                  {/* Title */}
                   <h3
                     className="mt-4 mb-2 text-lg font-semibold text-black dark:text-white break-words leading-tight line-clamp-2"
                     style={{ minHeight: '3.5rem' }}
@@ -276,7 +329,7 @@ const CartPage = () => {
                     {item.rprodId.productName}
                   </h3>
 
-                  {/* Description - Fixed height with line clamp */}
+                  {/* Description */}
                   <p
                     className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-2"
                     style={{ minHeight: '2.5rem' }}
@@ -316,10 +369,10 @@ const CartPage = () => {
                     Qty in cart: {item.quantity}
                   </div>
 
-                  {/* Spacer to push button to bottom */}
+                  {/* Spacer */}
                   <div className="flex-1" />
 
-                  {/* Button at bottom */}
+                  {/* Button */}
                   <div className="w-full flex justify-center">
                     <button
                       style={{ border: 'none', boxShadow: 'none' }}
@@ -339,7 +392,7 @@ const CartPage = () => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Buy Modal */}
       {modalOpen && modalItem && modalItem.rprodId && (
         <>
           <div
@@ -359,7 +412,7 @@ const CartPage = () => {
                 </div>
               </div>
               <div className="md:w-1/2 w-full p-8 flex flex-col justify-center bg-white dark:bg-gray-900">
-                <span className="bg-orange-500 text-white text-sm font-bold px-4 py-1 rounded-full mb-5">
+                <span className="bg-orange-500 text-white text-sm font-bold px-4 py-1 rounded-full mb-5 inline-block w-fit">
                   {modalItem.rprodId.category || 'General'}
                 </span>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
@@ -419,6 +472,56 @@ const CartPage = () => {
                     Buy
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && deleteItem && (
+        <>
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            onClick={() => setDeleteModalOpen(false)}
+          ></div>
+          <div className="fixed z-60 top-0 left-0 w-full h-full flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border-2 border-red-500 p-8 max-w-md w-full">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-full">
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className="h-8 w-8 text-red-600 dark:text-red-400" 
+                    viewBox="0 0 20 20" 
+                    fill="currentColor"
+                  >
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Remove Item?
+                  </h3>
+                </div>
+              </div>
+              
+              <p className="text-gray-700 dark:text-gray-300 mb-6">
+                Are you sure you want to remove <span className="font-semibold">{deleteItem.rprodId?.productName}</span> from your cart?
+              </p>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="flex-1 px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteFromCart}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition"
+                >
+                  Remove
+                </button>
               </div>
             </div>
           </div>
