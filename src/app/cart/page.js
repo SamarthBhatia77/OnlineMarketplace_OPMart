@@ -6,10 +6,9 @@ import Footer from '@/components/footer';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
-const getCustomerId = () =>
-  typeof window !== "undefined" && localStorage.getItem('user')
-    ? JSON.parse(localStorage.getItem('user')).id
-    : null;
+const getCustomerId = () => typeof window !== "undefined" && localStorage.getItem('user')
+  ? JSON.parse(localStorage.getItem('user')).id
+  : null;
 
 const CartPage = () => {
   const [cartItems, setCartItems] = useState([]);
@@ -21,16 +20,18 @@ const CartPage = () => {
   const router = useRouter();
 
   // Fetch cart for logged-in user
+  const fetchCartItems = async () => {
+  const customerId = getCustomerId();
+  if (!customerId) return;
+  setLoading(true); // show loading state
+  const response = await fetch(`http://localhost:5000/cart/${customerId}`);
+  const data = await response.json();
+  setCartItems((data.items || []).filter(i => i.rprodId));
+  setLoading(false);
+};
   useEffect(() => {
-    const customerId = getCustomerId();
-    if (!customerId) return;
-    fetch(`http://localhost:5000/cart/${customerId}`)
-      .then(r => r.json())
-      .then(d => {
-        setCartItems((d.items || []).filter(i => i.rprodId));
-        setLoading(false);
-      });
-  }, []);
+  fetchCartItems();
+}, []);
 
   // Modal open
   const openModal = (item) => {
@@ -40,36 +41,73 @@ const CartPage = () => {
   };
 
   // Register purchase in cprods
-  const handlePurchase = async () => {
-    if (!modalItem || !modalItem.rprodId || !modalQty) return;
+  const handlePurchase = async (item, quantity) => {
 
-    const customerId = getCustomerId();
-    const rprod = modalItem.rprodId;
-    const body = {
-      customerId,
-      productId: rprod._id,
-      productName: rprod.productName,
-      description: rprod.description,
-      image: rprod.image,
-      category: rprod.category,
-      quantity: Number(modalQty),
-      pricePerItem: rprod.sellingPrice,
-      totalPrice: Number(modalQty) * rprod.sellingPrice,
-      review: 0
-    };
+    console.log('DEBUG:', quantity, item, item.rprodId?.numberOfItems);
+
+  if (!quantity || quantity <= 0 || quantity > item.rprodId.numberOfItems) {
+    alert('Invalid quantity');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
     const resp = await fetch('http://localhost:5000/cprods', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        customerId: getCustomerId(),
+        retailerProdId: item.rprodId._id,  // RProd _id
+        productName: item.rprodId.productName,
+        description: item.rprodId.description,
+        image: item.rprodId.image,
+        category: item.rprodId.category,
+        quantity: Number(quantity),
+        pricePerItem: item.rprodId.sellingPrice,  // Retailer's selling price
+        review: 0
+      })
     });
-    if (resp.ok) {
-      alert('Purchased successfully!');
-      setModalOpen(false);
-      // Optionally, remove this item from cartItems or refetch cart
-    } else {
-      alert('There was an error processing the purchase.');
+
+    const data = await resp.json();
+
+    // Handle errors (including insufficient balance)
+    if (!resp.ok) {
+      if (data.message === "Insufficient balance") {
+        alert(
+          `❌ Insufficient Balance!\n\n` +
+          `Required: ₹${data.required?.toLocaleString()}\n` +
+          `Available: ₹${data.available?.toLocaleString()}\n\n` +
+          `Please add money to your wallet.`
+        );
+      } else {
+        alert(data.message || 'Purchase failed');
+      }
+      setLoading(false);
+      return;
     }
-  };
+
+    // Success! Remove from cart and refresh
+    await fetch(`http://localhost:5000/cart/${item._id}`, { method: 'DELETE' });
+    
+    // Refresh cart items
+    fetchCartItems();
+    
+    setLoading(false);
+    
+    alert(
+      `✅ Purchase Successful!\n\n` +
+      `Item purchased from retailer\n` +
+      `New Balance: ₹${data.newBalance?.toLocaleString()}`
+    );
+
+  } catch (err) {
+    setLoading(false);
+    console.error('Purchase error:', err);
+    alert('Error: ' + (err.message || 'Purchase failed'));
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -207,9 +245,11 @@ const CartPage = () => {
                           className="px-4 py-2 bg-red-700 dark:bg-red-700 text-white rounded">
                         Cancel
                   </button>
-                  <button onClick={handlePurchase}
-                          className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded font-semibold">
-                        Buy
+                  <button
+                  onClick={() => handlePurchase(modalItem, modalQty)}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded font-semibold"
+                  >
+                  Buy
                   </button>
                 </div>
               </div>

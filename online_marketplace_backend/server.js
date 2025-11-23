@@ -274,18 +274,117 @@ app.get('/cart/:customerId', async (req, res) => {
 });
 
 //POST route for cprods collection (after customer purchases a given number of items)
+// CUSTOMER PURCHASES FROM RETAILER (with balance check)
 app.post('/cprods', async (req, res) => {
   try {
-    const { customerId, productId, productName, description, image, category, quantity, pricePerItem, totalPrice, review } = req.body;
-    const newPurchase = await CProd.create({
-      customerId, productId, productName, description, image, category,
-      quantity, pricePerItem, totalPrice, review: review || 0
+    const {
+      customerId,
+      retailerProdId,  // This is the RProd _id (the product customer is buying)
+      productName,
+      description,
+      image,
+      category,
+      quantity,
+      pricePerItem,
+      review
+    } = req.body;
+
+    if (!customerId || !retailerProdId || !quantity || !pricePerItem) {
+      return res.status(400).json({ message: "Missing required info" });
+    }
+
+    // 1. Get the RProd to find retailer and verify stock
+    const rProd = await RProd.findById(retailerProdId);
+    if (!rProd) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // 2. Check if enough stock available
+    if (rProd.numberOfItems < quantity) {
+      return res.status(400).json({
+        message: `Insufficient stock. Only ${rProd.numberOfItems} units available.`
+      });
+    }
+
+    // 3. Get customer and retailer users
+    console.log("Incoming customerId:", customerId);
+
+    const customer = await User.findById(customerId);
+    const retailer = await User.findById(rProd.retailerId);
+
+    if (!customer || !retailer) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 4. Calculate total cost (retailer's price × quantity)
+    const totalPrice = quantity * pricePerItem;
+
+    // 5. ✅ CHECK BALANCE
+    if (customer.accountBalance < totalPrice) {
+      return res.status(400).json({
+        message: "Insufficient balance",
+        required: totalPrice,
+        available: customer.accountBalance
+      });
+    }
+
+    // 6. ✅ PERFORM TRANSACTION
+    // Deduct from customer
+    customer.accountBalance -= totalPrice;
+    await customer.save();
+
+    // Add to retailer
+    retailer.accountBalance += totalPrice;
+    await retailer.save();
+
+    // 7. Create CProd entry (customer purchase record)
+    const cprod = await CProd.create({
+      customerId,
+      productId: retailerProdId,  // Reference to RProd
+      productName,
+      description,
+      image,
+      category,
+      quantity,
+      pricePerItem,
+      totalPrice,
+      review: review || 0,
+      createdAt: new Date()
     });
-    res.status(201).json({ message: "Purchase recorded", purchase: newPurchase });
+
+    // 8. Reduce RProd stock
+    rProd.numberOfItems -= quantity;
+    await rProd.save();
+
+    // 9. Create wallet transaction records
+    await WalletTransaction.create({
+      userId: customerId,
+      amount: -totalPrice,
+      type: "debit",
+      description: `Purchased ${quantity} units of ${productName} from retailer`
+    });
+
+    await WalletTransaction.create({
+      userId: retailer._id,
+      amount: totalPrice,
+      type: "credit",
+      description: `Sale of ${quantity} units of ${productName} to customer`
+    });
+
+    // 10. Return success with updated balance
+    return res.status(201).json({
+      success: true,
+      customerProdId: cprod._id,
+      newBalance: customer.accountBalance,
+      message: "Purchase successful"
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "Error recording purchase" });
+    console.error("Error in POST /cprods:", err);
+    return res.status(500).json({ message: "Server error." });
   }
 });
+
 
 //GET for user
 app.get('/cprods/user/:uid', async (req, res) => {
