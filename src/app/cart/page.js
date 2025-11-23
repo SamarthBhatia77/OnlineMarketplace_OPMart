@@ -194,7 +194,7 @@ const CartPage = () => {
       }
       setLoading(false);
       return;
-
+    }
     // Success! Remove from cart and refresh
     await fetch(`http://localhost:5000/cart/${item._id}`, { method: 'DELETE' });
     
