@@ -14,13 +14,9 @@ import RProd from './models/RProd.js';
 
 import Cart from './models/Cart.js';
 import WalletTransaction from "./models/WalletTransaction.js";
-//console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
 
-//import cloudinary from "./cloudinary.js";
-
-
-import cloudinary from "./cloudinary.js";
+import { uploadToImageKit } from "./imagekit.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -443,10 +439,8 @@ app.post("/wprods/create", async (req, res) => {
         .json({ message: "Missing required fields." });
     }
 
-    // 1. Upload image to Cloudinary
-    const uploadRes = await cloudinary.uploader.upload(base64Image, {
-      folder: "oopmart-wprods",
-    });
+    // 1. Upload image to ImageKit
+const imageUrl = await uploadToImageKit(base64Image, `${productName}_${Date.now()}`);
 
     // 2. Actually create and save the product in MongoDB (IMPORTANT!)
     const newItem = await WProd.create({
@@ -456,7 +450,7 @@ app.post("/wprods/create", async (req, res) => {
       sellingPrice,
       numberOfItems,
       category,
-      image: uploadRes.secure_url, // Only store the Cloudinary URL
+      image: imageUrl, // ImageKit URL
     });
 
     // 3. Respond with the new item
