@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
-
-
+import { filterItemsBySearch } from '@/lib/searchFilter';
 
 const WholesalerPage = () => {
   const router = useRouter();
   const [showAddItemForm, setShowAddItemForm] = useState(false);
   const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,33 +71,46 @@ const WholesalerPage = () => {
     setLoading(false);
   }, [router]);
 
-
-  
   // Fetch all items for this wholesaler
-// Fetch all items for this wholesaler
-useEffect(() => {
-  const fetchItems = async () => {
-    try {
-      if (!user || !user.id) return;   // prevent wrong fetch
-      const res = await fetch(`http://localhost:5000/wprods/${user.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setItems(data.items || []);
-      } else {
-        console.error("Failed to fetch items:", data.message);
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        if (!user || !user.id) return;
+        const res = await fetch(`http://localhost:5000/wprods/${user.id}`);
+        const data = await res.json();
+        if (res.ok) {
+          setItems(data.items || []);
+        } else {
+          console.error("Failed to fetch items:", data.message);
+        }
+      } catch (err) {
+        console.error("Error fetching items:", err);
       }
-    } catch (err) {
-      console.error("Error fetching items:", err);
+    };
+
+    if (user && user.id) {
+      fetchItems();
     }
-  };
+  }, [user]);
 
-  if (user && user.id) {
-    fetchItems();
-  }
-}, [user]);
+  // Listen for search query changes from Navbar
+  useEffect(() => {
+    const handleSearchChange = (event) => {
+      setSearchQuery(event.detail.query);
+    };
 
+    window.addEventListener('searchQueryChanged', handleSearchChange);
+    return () => window.removeEventListener('searchQueryChanged', handleSearchChange);
+  }, []);
 
-
+  // Filter items by search query
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setFilteredItems(filterItemsBySearch(items, searchQuery));
+    } else {
+      setFilteredItems(items);
+    }
+  }, [items, searchQuery]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -107,86 +121,79 @@ useEffect(() => {
   };
 
   const handleImageChange = (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    setFormData(prev => ({
-      ...prev,
-      image: file,
-    }));
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = reader.result; // data:image/...;base64,...
-      setImagePreview(base64);
+    const file = e.target.files[0];
+    if (file) {
       setFormData(prev => ({
         ...prev,
-        imageBase64: base64,
+        image: file,
       }));
-    };
-    reader.readAsDataURL(file);
-  }
-};
 
-
-  
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result;
+        setImagePreview(base64);
+        setFormData(prev => ({
+          ...prev,
+          imageBase64: base64,
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e) => {
     console.log("handleSubmit fired");
-  e.preventDefault();
-  if (!user) return;
+    e.preventDefault();
+    if (!user) return;
 
-  console.log("Submitting formData:", formData, "user:", user); // 👈
+    console.log("Submitting formData:", formData, "user:", user);
 
-  if (!formData.imageBase64) {
-    alert("Please select an image");
-    return;
-  }
-
-  try {
-    const res = await fetch("http://localhost:5000/wprods/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        wholesalerId: user.id || user._id,  // 👈 ensure correct field
-        productName: formData.productName,
-        description: formData.description,
-        sellingPrice: formData.sellingPrice,
-        numberOfItems: formData.numberOfItems,
-        category: formData.category,
-        base64Image: formData.imageBase64,
-      }),
-    });
-    // ...
-
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      alert(data.message || "Failed to add item");
+    if (!formData.imageBase64) {
+      alert("Please select an image");
       return;
     }
 
-    // Add the new item to the grid immediately
-    setItems((prev) => [data.item, ...prev]);
+    try {
+      const res = await fetch("http://localhost:5000/wprods/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wholesalerId: user.id || user._id,
+          productName: formData.productName,
+          description: formData.description,
+          sellingPrice: formData.sellingPrice,
+          numberOfItems: formData.numberOfItems,
+          category: formData.category,
+          base64Image: formData.imageBase64,
+        }),
+      });
 
-    setShowAddItemForm(false);
-    setFormData({
-      productName: "",
-      description: "",
-      sellingPrice: "",
-      numberOfItems: "",
-      category: "",
-      image: null,
-      imageBase64: "",
-    });
-    setImagePreview(null);
-  } catch (err) {
-    console.error("Create item error:", err);
-    alert("Something went wrong while adding the item");
-  }
-};
+      const data = await res.json();
 
+      if (!res.ok) {
+        alert(data.message || "Failed to add item");
+        return;
+      }
 
+      // Add the new item to the grid immediately
+      setItems((prev) => [data.item, ...prev]);
+
+      setShowAddItemForm(false);
+      setFormData({
+        productName: "",
+        description: "",
+        sellingPrice: "",
+        numberOfItems: "",
+        category: "",
+        image: null,
+        imageBase64: "",
+      });
+      setImagePreview(null);
+    } catch (err) {
+      console.error("Create item error:", err);
+      alert("Something went wrong while adding the item");
+    }
+  };
 
   const closeForm = () => {
     setShowAddItemForm(false);
@@ -232,9 +239,16 @@ useEffect(() => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Your Items
-          </h2>
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Your Items
+            </h2>
+            {searchQuery.trim() && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                Search results for: "{searchQuery}" ({filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'})
+              </p>
+            )}
+          </div>
           <button
             onClick={() => setShowAddItemForm(true)}
             className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
@@ -246,80 +260,87 @@ useEffect(() => {
           </button>
         </div>
 
-        {items.length === 0 ? (
-  <div className="text-center py-20">
-    <div className="mb-8">
-      <svg
-        className="w-24 h-24 mx-auto text-gray-400"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
-        />
-      </svg>
-    </div>
-    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-      No Items Yet
-    </h3>
-    <p className="text-gray-600 dark:text-gray-400 mb-8">
-      Get started by adding your first item to sell
-    </p>
-    <button
-      onClick={() => setShowAddItemForm(true)}
-      className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition-all duration-300"
-    >
-      Add Your First Item
-    </button>
-  </div>
-) : (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-    {items.map((item) => (
-      <div
-        key={item._id}
-        className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col"
-      >
-        <div className="relative h-56 w-full bg-gray-800">
-          <Image
-            src={item.image}
-            alt={item.productName}
-            fill
-            className="object-cover"
-          />
-        </div>
-
-        <div className="p-4 flex flex-col gap-2 flex-1">
-          <h3 className="text-lg font-semibold text-white">
-            {item.productName}
-          </h3>
-          <p className="text-sm text-gray-400 line-clamp-2">
-            {item.description}
-          </p>
-
-          <p className="text-xs text-orange-400 mt-1">
-            Category: {item.category}
-          </p>
-
-          <div className="mt-auto flex items-center justify-between pt-2">
-            <div>
-              <p className="text-orange-400 font-bold text-lg">
-                ₹{Number(item.sellingPrice).toLocaleString()}
-              </p>
-              <p className="text-xs text-gray-400">
-                Qty: {Number(item.numberOfItems).toLocaleString()} units
-              </p>
+        {filteredItems.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="mb-8">
+              <svg
+                className="w-24 h-24 mx-auto text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                {searchQuery.trim() ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                  />
+                )}
+              </svg>
             </div>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+              {searchQuery.trim() ? 'No Items Found' : 'No Items Yet'}
+            </h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-8">
+              {searchQuery.trim() 
+                ? `No results for "${searchQuery}". Try different keywords.`
+                : 'Get started by adding your first item to sell'}
+            </p>
+            {!searchQuery.trim() && (
+              <button
+                onClick={() => setShowAddItemForm(true)}
+                className="bg-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-orange-700 transition-all duration-300"
+              >
+                Add Your First Item
+              </button>
+            )}
           </div>
-        </div>
-      </div>
-    ))}
-  </div>
-)}
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredItems.map((item) => (
+              <div
+                key={item._id}
+                className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col"
+              >
+                <div className="relative h-56 w-full bg-gray-800">
+                  <Image
+                    src={item.image}
+                    alt={item.productName}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
 
+                <div className="p-4 flex flex-col gap-2 flex-1">
+                  <h3 className="text-lg font-semibold text-white">
+                    {item.productName}
+                  </h3>
+                  <p className="text-sm text-gray-400 line-clamp-2">
+                    {item.description}
+                  </p>
+
+                  <p className="text-xs text-orange-400 mt-1">
+                    Category: {item.category}
+                  </p>
+
+                  <div className="mt-auto flex items-center justify-between pt-2">
+                    <div>
+                      <p className="text-orange-400 font-bold text-lg">
+                        ₹{Number(item.sellingPrice).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Qty: {Number(item.numberOfItems).toLocaleString()} units
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Add Item Modal/Form */}
