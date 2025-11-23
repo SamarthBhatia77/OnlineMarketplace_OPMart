@@ -155,7 +155,7 @@ const CustomerPage = () => {
           <p className="text-xl text-orange-100">
             {selectedCategory 
               ? `Discover ${selectedCategory} products` 
-              : 'Discover & buy from retailers on OPMart!'}
+              : 'Discover & buy from handpicked retailers on OPMart!'}
           </p>
         </div>
       </section>

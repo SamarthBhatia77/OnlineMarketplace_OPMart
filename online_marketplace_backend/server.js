@@ -161,6 +161,50 @@ app.post("/wprods/:id/reduce", async (req, res) => {
   }
 });
 
+// DELETE item from cart
+app.delete('/cart/:cartItemId', async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    
+    const result = await Cart.findByIdAndDelete(cartItemId);
+    
+    if (!result) {
+      return res.status(404).json({ message: 'Cart item not found' });
+    }
+    
+    res.status(200).json({ message: 'Item removed from cart successfully' });
+  } catch (err) {
+    console.error('Error deleting cart item:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET total profit made by a retailer (sum of totalPrice for products where this retailer is the seller)
+// [GET] /cprods/retailer/:retailerId/profit
+app.get('/cprods/retailer/:retailerId/profit', async (req, res) => {
+  try {
+    const { retailerId } = req.params;
+
+    // Get all rprod IDs for this retailer
+    const rprods = await RProd.find({ retailerId }, { _id: 1 });
+    const rprodIds = rprods.map(rp => rp._id);
+
+    // Get sum of totalPrice in cprods for these productIds
+    const sumDoc = await CProd.aggregate([
+      { $match: { productId: { $in: rprodIds } } },
+      { $group: { _id: null, profit: { $sum: "$totalPrice" } } }
+    ]);
+    const profit = sumDoc.length > 0 ? sumDoc[0].profit : 0;
+
+    res.json({ profit });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.toString() });
+  }
+});
+
+
+
+
 // POST item post for wholesaler
 app.post('/wprods/create', async (req, res) => {
   try {
