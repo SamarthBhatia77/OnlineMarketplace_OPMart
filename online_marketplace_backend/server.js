@@ -30,7 +30,9 @@ app.use(
     origin: "http://localhost:3000",
   })
 );
-app.use(express.json());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 5000;
 
@@ -156,6 +158,52 @@ app.post("/wprods/:id/reduce", async (req, res) => {
   } catch (err) {
     console.error("Error in POST /wprods/:id/reduce", err);
     res.status(500).json({ message: "Server error." });
+  }
+});
+
+// POST item post for wholesaler
+app.post('/wprods/create', async (req, res) => {
+  try {
+    const { 
+      wholesalerId, 
+      productName, 
+      description, 
+      sellingPrice, 
+      numberOfItems, 
+      category, 
+      base64Image 
+    } = req.body;
+
+    // Validate required fields
+    if (!wholesalerId || !productName || !sellingPrice || !numberOfItems || !base64Image) {
+      return res.status(400).json({ 
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Create new product
+    const newProduct = new WProd({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice: Number(sellingPrice),
+      numberOfItems: Number(numberOfItems),
+      category,
+      image: base64Image, // Store base64 directly or upload to cloud
+      createdAt: new Date()
+    });
+
+    await newProduct.save();
+
+    res.status(201).json({ 
+      message: 'Product created successfully',
+      item: newProduct 
+    });
+  } catch (err) {
+    console.error('Error creating product:', err);
+    res.status(500).json({ 
+      message: 'Server error while creating product' 
+    });
   }
 });
 
