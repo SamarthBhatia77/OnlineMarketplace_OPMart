@@ -14,13 +14,9 @@ import RProd from './models/RProd.js';
 
 import Cart from './models/Cart.js';
 import WalletTransaction from "./models/WalletTransaction.js";
-//console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
 
-//import cloudinary from "./cloudinary.js";
-
-
-import cloudinary from "./cloudinary.js";
+import { uploadToImageKit } from "./imagekit.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -126,40 +122,113 @@ async function startServer() {
     //rprods route
     
 // Add purchased retailer product into rprods
+// Add purchased retailer product into rprods WITH BALANCE CHECK
+// RETAILER PURCHASES FROM WHOLESALER
+// Add purchased retailer product into rprods WITH BALANCE CHECK
 app.post("/rprods", async (req, res) => {
   try {
     const {
-      retailerId, wholesalerProdId, productName, description, image,
-      category, marketPrice, numberOfItems, sellingPrice
+      retailerId, 
+      wholesalerProdId, 
+      productName, 
+      description, 
+      image,
+      category, 
+      marketPrice, 
+      numberOfItems, 
+      sellingPrice
     } = req.body;
-    if (!retailerId || !wholesalerProdId) return res.status(400).json({ message: "Missing info" });
-    const RProd = mongoose.model('RProd') // or require('./models/RProd.js') if needed
+
+    if (!retailerId || !wholesalerProdId) {
+      return res.status(400).json({ message: "Missing info" });
+    }
+
+    // 1. Get the WProd to find wholesaler and verify stock
+    const wProd = await WProd.findById(wholesalerProdId);
+    if (!wProd) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // 2. Check if enough stock available
+    if (wProd.numberOfItems < numberOfItems) {
+      return res.status(400).json({ 
+        message: `Insufficient stock. Only ${wProd.numberOfItems} units available.` 
+      });
+    }
+
+    // 3. Get retailer and wholesaler users
+    const retailer = await User.findById(retailerId);
+    const wholesaler = await User.findById(wProd.wholesalerId);
+
+    if (!retailer || !wholesaler) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 4. Calculate total cost (wholesaler's price × quantity)
+    const totalCost = numberOfItems * marketPrice;
+
+    // 5. ✅ CHECK BALANCE
+    if (retailer.accountBalance < totalCost) {
+      return res.status(400).json({ 
+        message: "Insufficient balance",
+        required: totalCost,
+        available: retailer.accountBalance
+      });
+    }
+
+    // 6. ✅ PERFORM TRANSACTION
+    // Deduct from retailer
+    retailer.accountBalance -= totalCost;
+    await retailer.save();
+
+    // Add to wholesaler
+    wholesaler.accountBalance += totalCost;
+    await wholesaler.save();
+
+    // 7. Create RProd entry
     const rprod = await RProd.create({
-      retailerId, wholesalerProdId, productName, description, image,
-      category, marketPrice, numberOfItems, sellingPrice, createdAt: new Date()
+      retailerId, 
+      wholesalerProdId, 
+      productName, 
+      description, 
+      image,
+      category, 
+      marketPrice, 
+      numberOfItems, 
+      sellingPrice, 
+      createdAt: new Date()
     });
-    return res.status(201).json({ success: true, retailerProdId: rprod._id });
+
+    // 8. Reduce WProd stock
+    wProd.numberOfItems -= numberOfItems;
+    await wProd.save();
+
+    // 9. Create wallet transaction records
+    await WalletTransaction.create({
+      userId: retailerId,
+      amount: -totalCost,
+      type: "debit",
+      description: `Purchased ${numberOfItems} units of ${productName} from wholesaler`,
+    });
+
+    await WalletTransaction.create({
+      userId: wholesaler._id,
+      amount: totalCost,
+      type: "credit",
+      description: `Sale of ${numberOfItems} units of ${productName} to retailer`,
+    });
+
+    // 10. Return success with updated balance
+    return res.status(201).json({ 
+      success: true, 
+      retailerProdId: rprod._id,
+      newBalance: retailer.accountBalance,
+      message: "Purchase successful"
+    });
+
   } catch (err) {
     console.error("Error in POST /rprods", err);
     return res.status(500).json({ message: "Server error." });
-  }
-});
-
-//reduce wholesaler stock after bought by retailer
-app.post("/wprods/:id/reduce", async (req, res) => {
-  try {
-    const { quantity } = req.body;
-    const id = req.params.id;
-    const WProd = mongoose.model('WProd'); // or require('./models/WProd.js')
-    const prod = await WProd.findById(id);
-    if (!prod) return res.status(404).json({ message: "Product not found" });
-    if (prod.numberOfItems < quantity) return res.status(400).json({ message: "Not enough items in stock" });
-    prod.numberOfItems -= quantity;
-    await prod.save();
-    res.status(200).json({ success: true, numberOfItems: prod.numberOfItems });
-  } catch (err) {
-    console.error("Error in POST /wprods/:id/reduce", err);
-    res.status(500).json({ message: "Server error." });
   }
 });
 
@@ -443,10 +512,8 @@ app.post("/wprods/create", async (req, res) => {
         .json({ message: "Missing required fields." });
     }
 
-    // 1. Upload image to Cloudinary
-    const uploadRes = await cloudinary.uploader.upload(base64Image, {
-      folder: "oopmart-wprods",
-    });
+    // 1. Upload image to ImageKit
+const imageUrl = await uploadToImageKit(base64Image, `${productName}_${Date.now()}`);
 
     // 2. Actually create and save the product in MongoDB (IMPORTANT!)
     const newItem = await WProd.create({
@@ -456,7 +523,7 @@ app.post("/wprods/create", async (req, res) => {
       sellingPrice,
       numberOfItems,
       category,
-      image: uploadRes.secure_url, // Only store the Cloudinary URL
+      image: imageUrl, // ImageKit URL
     });
 
     // 3. Respond with the new item
