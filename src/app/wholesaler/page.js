@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
-import { filterItemsBySearch } from '@/lib/searchFilter';
+import { filterItemsBySearch } from 'src/lib/searchFilter';
 
 const WholesalerPage = () => {
   const router = useRouter();
@@ -142,58 +142,90 @@ const WholesalerPage = () => {
   };
 
   const handleSubmit = async (e) => {
-    console.log("handleSubmit fired");
-    e.preventDefault();
-    if (!user) return;
+  e.preventDefault();
+  
+  if (!user) {
+    alert('User not logged in');
+    return;
+  }
 
-    console.log("Submitting formData:", formData, "user:", user);
+  if (!formData.imageBase64) {
+    alert("Please select an image");
+    return;
+  }
 
-    if (!formData.imageBase64) {
-      alert("Please select an image");
+  // Show loading state
+  const submitButton = e.target.querySelector('button[type="submit"]');
+  const originalText = submitButton.textContent;
+  submitButton.textContent = 'Adding...';
+  submitButton.disabled = true;
+
+  try {
+    console.log('Sending request to: http://localhost:5000/wprods/create');
+    
+    const res = await fetch("http://localhost:5000/wprods/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wholesalerId: user.id || user._id,
+        productName: formData.productName,
+        description: formData.description,
+        sellingPrice: Number(formData.sellingPrice),
+        numberOfItems: Number(formData.numberOfItems),
+        category: formData.category,
+        base64Image: formData.imageBase64,
+      }),
+    });
+
+    console.log('Response status:', res.status);
+    console.log('Response headers:', res.headers.get('content-type'));
+
+    // Check if response is JSON
+    const contentType = res.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const textResponse = await res.text();
+      console.error("Server returned non-JSON response:", textResponse.substring(0, 200));
+      alert(`❌ Server Error: The endpoint /wprods/create returned HTML instead of JSON.\n\nStatus: ${res.status}\n\nThis usually means:\n1. The route doesn't exist in your backend\n2. Check your server.js file\n3. Make sure the server is running`);
+      submitButton.textContent = originalText;
+      submitButton.disabled = false;
       return;
     }
 
-    try {
-      const res = await fetch("http://localhost:5000/wprods/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wholesalerId: user.id || user._id,
-          productName: formData.productName,
-          description: formData.description,
-          sellingPrice: formData.sellingPrice,
-          numberOfItems: formData.numberOfItems,
-          category: formData.category,
-          base64Image: formData.imageBase64,
-        }),
-      });
+    const data = await res.json();
+    console.log('Response data:', data);
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.message || "Failed to add item");
-        return;
-      }
-
-      // Add the new item to the grid immediately
-      setItems((prev) => [data.item, ...prev]);
-
-      setShowAddItemForm(false);
-      setFormData({
-        productName: "",
-        description: "",
-        sellingPrice: "",
-        numberOfItems: "",
-        category: "",
-        image: null,
-        imageBase64: "",
-      });
-      setImagePreview(null);
-    } catch (err) {
-      console.error("Create item error:", err);
-      alert("Something went wrong while adding the item");
+    if (!res.ok) {
+      alert(data.message || "Failed to add item");
+      submitButton.textContent = originalText;
+      submitButton.disabled = false;
+      return;
     }
-  };
+
+    // Success! Add item to list
+    setItems((prev) => [data.item, ...prev]);
+
+    // Close modal and reset form
+    setShowAddItemForm(false);
+    setFormData({
+      productName: "",
+      description: "",
+      sellingPrice: "",
+      numberOfItems: "",
+      category: "",
+      image: null,
+      imageBase64: "",
+    });
+    setImagePreview(null);
+    
+    alert("✅ Item added successfully!");
+  } catch (err) {
+    console.error("Error details:", err);
+    alert(`❌ Error: ${err.message}\n\nCheck the browser console for more details.`);
+    submitButton.textContent = originalText;
+    submitButton.disabled = false;
+  }
+};
+
 
   const closeForm = () => {
     setShowAddItemForm(false);
@@ -300,46 +332,80 @@ const WholesalerPage = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredItems.map((item) => (
-              <div
-                key={item._id}
-                className="bg-[#111827] rounded-2xl shadow-xl overflow-hidden flex flex-col"
-              >
-                <div className="relative h-56 w-full bg-gray-800">
-                  <Image
-                    src={item.image}
-                    alt={item.productName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
+  {filteredItems.map((item) => (
+    <div
+      key={item._id}
+      className={`
+        bg-white dark:bg-gray-800 rounded-3xl shadow-xl flex flex-col
+        p-0
+        transition-all duration-200
+        border border-transparent
+        hover:border-orange-400
+        hover:bg-gray-50 dark:hover:bg-gray-900
+        hover:shadow-[0_0_0_3px_rgba(255,133,0,0.21)]
+        cursor-pointer
+      `}
+      style={{
+        minWidth: 275,
+        maxWidth: 340,
+        minHeight: 450,
+        position: 'relative'
+      }}
+    >
+      {/* Image Section with Badge overlay */}
+      <div
+        className="relative rounded-t-3xl flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-6"
+        style={{ minHeight: 200, maxHeight: 200 }}
+      >
+        {/* Category Badge */}
+        <span className="absolute top-3 left-3 bg-orange-500 text-white text-xs px-4 py-1 rounded-full shadow z-10">
+          {item.category || 'General'}
+        </span>
+        
+        <Image
+          src={item.image}
+          alt={item.productName}
+          width={160}
+          height={160}
+          className="object-contain rounded-2xl"
+        />
+      </div>
 
-                <div className="p-4 flex flex-col gap-2 flex-1">
-                  <h3 className="text-lg font-semibold text-white">
-                    {item.productName}
-                  </h3>
-                  <p className="text-sm text-gray-400 line-clamp-2">
-                    {item.description}
-                  </p>
+      {/* Card Body */}
+      <div className="flex flex-col flex-1 px-6 pb-4 bg-white dark:bg-gray-800 rounded-b-3xl">
+        {/* Title - Fixed height with line clamp */}
+        <h3
+          className="mt-4 mb-2 text-lg font-semibold text-black dark:text-white break-words leading-tight line-clamp-2"
+          style={{ minHeight: '3.5rem' }}
+        >
+          {item.productName}
+        </h3>
 
-                  <p className="text-xs text-orange-400 mt-1">
-                    Category: {item.category}
-                  </p>
+        {/* Description - Fixed height with line clamp */}
+        <p
+          className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-2"
+          style={{ minHeight: '2.5rem' }}
+        >
+          {item.description}
+        </p>
 
-                  <div className="mt-auto flex items-center justify-between pt-2">
-                    <div>
-                      <p className="text-orange-400 font-bold text-lg">
-                        ₹{Number(item.sellingPrice).toLocaleString()}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Qty: {Number(item.numberOfItems).toLocaleString()} units
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* Price */}
+        <div className="text-[22px] font-bold text-orange-300 mb-2">
+          ₹{Number(item.sellingPrice).toLocaleString()}
+        </div>
+
+        {/* Stock */}
+        <div className="mb-4 text-[15px] text-green-400 font-bold">
+          In Stock: {Number(item.numberOfItems).toLocaleString()} units
+        </div>
+
+        {/* Spacer to push content to maintain alignment */}
+        <div className="flex-1" />
+      </div>
+    </div>
+  ))}
+</div>
+
         )}
       </div>
 

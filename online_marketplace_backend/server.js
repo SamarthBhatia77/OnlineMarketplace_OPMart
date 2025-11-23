@@ -14,13 +14,9 @@ import RProd from './models/RProd.js';
 
 import Cart from './models/Cart.js';
 import WalletTransaction from "./models/WalletTransaction.js";
-//console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
 
-//import cloudinary from "./cloudinary.js";
-
-
-import cloudinary from "./cloudinary.js";
+import { uploadToImageKit } from "./imagekit.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -34,7 +30,9 @@ app.use(
     origin: "http://localhost:3000",
   })
 );
-app.use(express.json());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 5000;
 
@@ -160,6 +158,52 @@ app.post("/wprods/:id/reduce", async (req, res) => {
   } catch (err) {
     console.error("Error in POST /wprods/:id/reduce", err);
     res.status(500).json({ message: "Server error." });
+  }
+});
+
+// POST item post for wholesaler
+app.post('/wprods/create', async (req, res) => {
+  try {
+    const { 
+      wholesalerId, 
+      productName, 
+      description, 
+      sellingPrice, 
+      numberOfItems, 
+      category, 
+      base64Image 
+    } = req.body;
+
+    // Validate required fields
+    if (!wholesalerId || !productName || !sellingPrice || !numberOfItems || !base64Image) {
+      return res.status(400).json({ 
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Create new product
+    const newProduct = new WProd({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice: Number(sellingPrice),
+      numberOfItems: Number(numberOfItems),
+      category,
+      image: base64Image, // Store base64 directly or upload to cloud
+      createdAt: new Date()
+    });
+
+    await newProduct.save();
+
+    res.status(201).json({ 
+      message: 'Product created successfully',
+      item: newProduct 
+    });
+  } catch (err) {
+    console.error('Error creating product:', err);
+    res.status(500).json({ 
+      message: 'Server error while creating product' 
+    });
   }
 });
 
@@ -475,10 +519,8 @@ app.post("/wprods/create", async (req, res) => {
         .json({ message: "Missing required fields." });
     }
 
-    // 1. Upload image to Cloudinary
-    const uploadRes = await cloudinary.uploader.upload(base64Image, {
-      folder: "oopmart-wprods",
-    });
+    // 1. Upload image to ImageKit
+const imageUrl = await uploadToImageKit(base64Image, `${productName}_${Date.now()}`);
 
     // 2. Actually create and save the product in MongoDB (IMPORTANT!)
     const newItem = await WProd.create({
@@ -488,7 +530,7 @@ app.post("/wprods/create", async (req, res) => {
       sellingPrice,
       numberOfItems,
       category,
-      image: uploadRes.secure_url, // Only store the Cloudinary URL
+      image: imageUrl, // ImageKit URL
     });
 
     // 3. Respond with the new item
