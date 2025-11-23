@@ -76,11 +76,11 @@ const PortfolioChoosePage = () => {
         {/* Logo/Brand */}
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent font-poppins mb-4">
-            OOPMart
+            OPMart 🛒
           </h1>
           <p className="text-gray-600 text-sm mb-2">Everyone's favorite shopping destination!</p>
           <h2 className="text-3xl font-bold text-gray-800 mt-8">
-            Please Choose Your Portfolio
+            Please begin by choosing your portfolio
           </h2>
         </div>
 

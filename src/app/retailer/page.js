@@ -29,6 +29,13 @@ const RetailerPage = () => {
   const [mode, setMode] = useState('buy'); // 'buy' | 'sell'
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const [buyModalOpen, setBuyModalOpen] = useState(false);
+const [buyModalItem, setBuyModalItem] = useState(null);
+const [buyQty, setBuyQty] = useState(1);
+const [buySellingPrice, setBuySellingPrice] = useState('');
+const [modalLoading, setModalLoading] = useState(false);
+
   
 
 
@@ -240,38 +247,12 @@ useEffect(() => {
 
   // Quick buy from wholesale items: prompt qty and simulate purchase
   const handleBuy = (item) => {
-    const available = Number(item.numberOfItems ?? item.stock ?? 1000);
-    let qtyStr = prompt(`Enter quantity to BUY (available: ${available})`, '1');
-    if (!qtyStr) return;
-    const qty = Number(qtyStr);
-    if (isNaN(qty) || qty <= 0) {
-      alert('Invalid quantity');
-      return;
-    }
-    if (qty > available) {
-      if (!confirm(`Only ${available} available. Buy ${available} instead?`)) return;
-    }
-    const finalQty = Math.min(qty, available);
+  setBuyModalItem(item);
+  setBuyQty(1);
+  setBuySellingPrice('');
+  setBuyModalOpen(true);
+};
 
-    // compute purchase price from wholesaler item fields (sellingPrice or price)
-    const purchasePrice = Number(item.sellingPrice ?? item.price ?? 0);
-
-    const newRetailItem = {
-      _id: `local-${Date.now()}`,
-      productName: item.productName ?? item.title ?? 'Product',
-      description: item.description ?? item.subtitle ?? '',
-      sellingPrice: Number((purchasePrice * 1.25).toFixed(2)), // default markup 25%
-      purchasePrice: purchasePrice,
-      numberOfItems: finalQty,
-      category: item.category ?? item.badge ?? 'General',
-      image: item.image ?? item.thumbnail ?? null,
-      sourceWholesalerId: item.wholesalerId ?? item._id ?? null,
-      purchasedAt: new Date().toISOString()
-    };
-
-    setInventory(prev => [newRetailItem, ...prev]);
-    alert(`Bought ${finalQty} units of ${newRetailItem.productName} (simulated).`);
-  };
 
   // Delete from inventory
   const handleDelete = (id) => {
@@ -294,6 +275,77 @@ useEffect(() => {
     setInventory(prev => prev.filter(p => p._id !== it._id));
     setShowAddForm(true);
   };
+
+
+  const confirmBuy = async () => {
+  if (!buyQty || !buySellingPrice || !buyModalItem) return;
+  const qty = Number(buyQty);
+  if (isNaN(qty) || qty <= 0 || qty > Number(buyModalItem.numberOfItems)) {
+    alert('Invalid quantity');
+    return;
+  }
+  setModalLoading(true);
+
+  try {
+    // Update rprods in backend
+    const resp = await fetch('http://localhost:5000/rprods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        retailerId: user.id,
+        wholesalerProdId: buyModalItem._id,
+        productName: buyModalItem.productName,
+        description: buyModalItem.description,
+        category: buyModalItem.category,
+        image: buyModalItem.image,
+        marketPrice: buyModalItem.sellingPrice,
+        numberOfItems: qty,
+        sellingPrice: Number(buySellingPrice)
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      alert(data.message || 'Failed to buy');
+      setModalLoading(false);
+      return;
+    }
+
+    // Update frontend inventory (optimistic UI)
+    const newEntry = {
+      ...buyModalItem,
+      _id: data.retailerProdId || `rprod-${Date.now()}`,
+      numberOfItems: qty,
+      sellingPrice: Number(buySellingPrice),
+      purchasePrice: Number(buyModalItem.sellingPrice),
+      sourceWholesalerId: buyModalItem.wholesalerId,
+      purchasedAt: new Date().toISOString()
+    };
+    setInventory(prev => [newEntry, ...prev]);
+
+    // Update the stock in wprods on backend
+    await fetch(`http://localhost:5000/wprods/${buyModalItem._id}/reduce`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: qty })
+    });
+
+    // Update UI for wholesaler items
+    setWholesaleItems(prev => prev.map(w =>
+      w._id === buyModalItem._id
+        ? { ...w, numberOfItems: w.numberOfItems - qty }
+        : w
+    ));
+
+    setBuyModalOpen(false);
+    setModalLoading(false);
+
+    alert('Item bought and added to Sell Inventory!');
+  } catch (err) {
+    setModalLoading(false);
+    alert('Error: ' + (err.message || err));
+  }
+};
+
 
   // Stats
   const totalUnits = inventory.reduce((s, it) => s + Number(it.numberOfItems || 0), 0);
@@ -453,8 +505,7 @@ useEffect(() => {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <button onClick={() => handleEdit(it)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">Edit</button>
-                        <button onClick={() => handleDelete(it._id)} className="px-3 py-2 rounded-lg border border-red-400 text-sm text-red-600">Delete</button>
+                        
                       </div>
                     </div>
                   </div>
@@ -530,6 +581,70 @@ useEffect(() => {
           </div>
         </>
       )}
+
+
+      {buyModalOpen && buyModalItem && (
+  <>
+    {/* Proper blur on the background */}
+    <div className="fixed inset-0 z-40 backdrop-blur-sm bg-black/30 transition-all duration-200" onClick={() => setBuyModalOpen(false)} />
+
+    {/* Horizontal modal */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-900 border-2 border-orange-500 rounded-2xl shadow-2xl max-w-3xl w-full flex flex-col md:flex-row overflow-hidden pointer-events-auto">
+        {/* Left: Image */}
+        <div className="md:w-1/2 w-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 p-4 md:py-8">
+          <div className="relative w-full h-72 md:h-96 flex items-center justify-center">
+            <Image
+              src={buyModalItem.image || buyModalItem.thumbnail || ''}
+              alt={buyModalItem.productName || ''}
+              fill
+              className="object-contain rounded-lg"
+            />
+          </div>
+        </div>
+        {/* Right: Details + Actions */}
+        <div className="md:w-1/2 w-full flex flex-col justify-center p-6 bg-white dark:bg-gray-900">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white mb-1">{buyModalItem.productName}</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-2">{buyModalItem.description}</p>
+          <p className="text-orange-500 font-semibold mb-1">Market Price: ₹{buyModalItem.sellingPrice}</p>
+          <p className="text-xs text-gray-400 mb-4">Available: {buyModalItem.numberOfItems} units</p>
+          <form onSubmit={async (e) => { e.preventDefault(); await confirmBuy(); }}>
+            <div className="mb-2">
+              <label className="block text-gray-700 dark:text-gray-200 mb-1">Buy Quantity</label>
+              <input
+                type="number"
+                min="1"
+                max={buyModalItem.numberOfItems}
+                value={buyQty}
+                onChange={e => setBuyQty(e.target.value)}
+                className="w-full px-3 py-2 rounded border-2 border-orange-400 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 focus:outline-none"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 dark:text-gray-200 mb-1">Your Selling Price (per unit)</label>
+              <input
+                type="number"
+                min="1"
+                value={buySellingPrice}
+                onChange={e => setBuySellingPrice(e.target.value)}
+                className="w-full px-3 py-2 rounded border-2 border-orange-400 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 focus:outline-none"
+                required
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button type="button" onClick={() => setBuyModalOpen(false)} className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium">Cancel</button>
+              <button type="submit" disabled={modalLoading} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg font-semibold">
+                {modalLoading ? 'Buying...' : 'Buy'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </>
+
+)}
 
       <Footer />
     </div>

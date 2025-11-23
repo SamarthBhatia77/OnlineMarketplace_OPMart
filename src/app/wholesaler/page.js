@@ -221,10 +221,10 @@ useEffect(() => {
       <section className="bg-gradient-to-r from-orange-500 via-orange-600 to-red-600 text-white py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-5xl font-bold font-poppins mb-4">
-            Welcome to OPMart!
+            OPMart for Wholesalers 💰
           </h1>
           <p className="text-xl text-orange-100">
-            Browse your items or add more to sell
+            Browse your items or add more to sell, start the selling chain!
           </p>
         </div>
       </section>
