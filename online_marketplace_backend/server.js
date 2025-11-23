@@ -30,7 +30,9 @@ app.use(
     origin: "http://localhost:3000",
   })
 );
-app.use(express.json());
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 5000;
 
@@ -232,6 +234,114 @@ app.post("/rprods", async (req, res) => {
   }
 });
 
+//reduce wholesaler stock after bought by retailer
+app.post("/wprods/:id/reduce", async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const id = req.params.id;
+    const WProd = mongoose.model('WProd'); // or require('./models/WProd.js')
+    const prod = await WProd.findById(id);
+    if (!prod) return res.status(404).json({ message: "Product not found" });
+    if (prod.numberOfItems < quantity) return res.status(400).json({ message: "Not enough items in stock" });
+    prod.numberOfItems -= quantity;
+    await prod.save();
+    res.status(200).json({ success: true, numberOfItems: prod.numberOfItems });
+  } catch (err) {
+    console.error("Error in POST /wprods/:id/reduce", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+// DELETE item from cart
+app.delete('/cart/:cartItemId', async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    
+    const result = await Cart.findByIdAndDelete(cartItemId);
+    
+    if (!result) {
+      return res.status(404).json({ message: 'Cart item not found' });
+    }
+    
+    res.status(200).json({ message: 'Item removed from cart successfully' });
+  } catch (err) {
+    console.error('Error deleting cart item:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET total profit made by a retailer (sum of totalPrice for products where this retailer is the seller)
+// [GET] /cprods/retailer/:retailerId/profit
+app.get('/cprods/retailer/:retailerId/profit', async (req, res) => {
+  try {
+    const { retailerId } = req.params;
+
+    // Get all rprod IDs for this retailer
+    const rprods = await RProd.find({ retailerId }, { _id: 1 });
+    const rprodIds = rprods.map(rp => rp._id);
+
+    // Get sum of totalPrice in cprods for these productIds
+    const sumDoc = await CProd.aggregate([
+      { $match: { productId: { $in: rprodIds } } },
+      { $group: { _id: null, profit: { $sum: "$totalPrice" } } }
+    ]);
+    const profit = sumDoc.length > 0 ? sumDoc[0].profit : 0;
+
+    res.json({ profit });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.toString() });
+  }
+});
+
+
+
+
+// POST item post for wholesaler
+app.post('/wprods/create', async (req, res) => {
+  try {
+    const { 
+      wholesalerId, 
+      productName, 
+      description, 
+      sellingPrice, 
+      numberOfItems, 
+      category, 
+      base64Image 
+    } = req.body;
+
+    // Validate required fields
+    if (!wholesalerId || !productName || !sellingPrice || !numberOfItems || !base64Image) {
+      return res.status(400).json({ 
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Create new product
+    const newProduct = new WProd({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice: Number(sellingPrice),
+      numberOfItems: Number(numberOfItems),
+      category,
+      image: base64Image, // Store base64 directly or upload to cloud
+      createdAt: new Date()
+    });
+
+    await newProduct.save();
+
+    res.status(201).json({ 
+      message: 'Product created successfully',
+      item: newProduct 
+    });
+  } catch (err) {
+    console.error('Error creating product:', err);
+    res.status(500).json({ 
+      message: 'Server error while creating product' 
+    });
+  }
+});
+
 
 //customer add to cart POST
 app.post('/cart', async (req, res) => {
@@ -265,13 +375,16 @@ app.get('/rprods', async (req, res) => {
 //Getting the cart for a customer
 app.get('/cart/:customerId', async (req, res) => {
   try {
-    // Populate rprodId to pull product details for card display
-    const items = await Cart.find({ customerId: req.params.customerId }).populate('rprodId');
+    const items = await Cart.find({ 
+      customerId: new mongoose.Types.ObjectId(req.params.customerId) 
+    }).populate('rprodId');
     res.status(200).json({ items });
   } catch (err) {
+    console.error('Error in GET /cart/:customerId', err);
     res.status(500).json({ message: "Server error." });
   }
 });
+
 
 //POST route for cprods collection (after customer purchases a given number of items)
 // CUSTOMER PURCHASES FROM RETAILER (with balance check)
@@ -398,6 +511,35 @@ app.put('/cprods/:cid/rate', async (req, res) => {
   await CProd.findByIdAndUpdate(req.params.cid, { review: Math.max(1, Math.min(5, review)) });
   res.json({ message: "Review updated" });
 });
+
+
+// Get average rating for a product
+app.get('/api/product-rating/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    
+    // Find all purchases of this product across all customers
+    const purchases = await CProd.find({ productId });
+    
+    if (purchases.length === 0) {
+      return res.json({ averageRating: 0, reviewCount: 0 });
+    }
+    
+    // Calculate average rating
+    const totalRating = purchases.reduce((sum, purchase) => sum + (purchase.review || 0), 0);
+    const averageRating = totalRating / purchases.length;
+    
+    res.json({ 
+      averageRating: parseFloat(averageRating.toFixed(1)),
+      reviewCount: purchases.length 
+    });
+  } catch (err) {
+    console.error('Error fetching product rating:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 
 //GET retailer bought products
 // Get all rprods for a specific retailer
