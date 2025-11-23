@@ -13,6 +13,9 @@ import WalletTransaction from "./models/WalletTransaction.js";
 
 
 //import cloudinary from "./cloudinary.js";
+
+
+import cloudinary from "./cloudinary.js";
 import { sendOtpEmail } from "./email.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -373,7 +376,6 @@ app.post('/api/wallet-add', async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 
 app.get("/wprods/:wholesalerId", async (req, res) => {
   try {

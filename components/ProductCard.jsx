@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
-import products from '../data/products';
+//import products from '../data/products';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 
