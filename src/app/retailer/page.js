@@ -241,7 +241,7 @@ const RetailerPage = () => {
       return;
     }
     const newItem = {
-      _id: `local-${Date.now()}`,
+      id: `local-${Date.now()}`,
       productName: formData.productName,
       description: formData.description,
       sellingPrice: Number(formData.sellingPrice),
@@ -282,56 +282,84 @@ const RetailerPage = () => {
   };
 
   const confirmBuy = async () => {
-    if (!buyQty || !buySellingPrice || !buyModalItem) return;
-    const qty = Number(buyQty);
-    if (isNaN(qty) || qty <= 0 || qty > Number(buyModalItem.numberOfItems)) {
-      alert('Invalid quantity');
+  if (!buyQty || !buySellingPrice || !buyModalItem) return;
+  
+  const qty = Number(buyQty);
+  if (isNaN(qty) || qty <= 0 || qty > Number(buyModalItem.numberOfItems)) {
+    alert('Invalid quantity');
+    return;
+  }
+
+  setModalLoading(true);
+  
+  try {
+    // ✅ Call backend with balance check
+    const resp = await fetch('http://localhost:5000/rprods', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        retailerId: user.id,
+        wholesalerProdId: buyModalItem._id,
+        productName: buyModalItem.productName,
+        description: buyModalItem.description,
+        category: buyModalItem.category,
+        image: buyModalItem.image,
+        marketPrice: buyModalItem.sellingPrice,
+        numberOfItems: qty,
+        sellingPrice: Number(buySellingPrice)
+      })
+    });
+
+    const data = await resp.json();
+
+    // ✅ Handle errors (including insufficient balance)
+    if (!resp.ok) {
+      if (data.message === "Insufficient balance") {
+        alert(
+          `❌ Insufficient Balance!\n\n` +
+          `Required: ₹${data.required?.toLocaleString()}\n` +
+          `Available: ₹${data.available?.toLocaleString()}\n\n` +
+          `Please add money to your wallet.`
+        );
+      } else {
+        alert(data.message || 'Failed to buy');
+      }
+      setModalLoading(false);
       return;
     }
-    setModalLoading(true);
-    try {
-      const resp = await fetch('http://localhost:5000/rprods', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          retailerId: user.id,
-          wholesalerProdId: buyModalItem._id,
-          productName: buyModalItem.productName,
-          description: buyModalItem.description,
-          category: buyModalItem.category,
-          image: buyModalItem.image,
-          marketPrice: buyModalItem.sellingPrice,
-          numberOfItems: qty,
-          sellingPrice: Number(buySellingPrice)
-        })
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        alert(data.message || 'Failed to buy');
-        setModalLoading(false);
-        return;
-      }
-      const invRes = await fetch(`http://localhost:5000/rprods/retailer/${user.id}`);
-      const invData = await invRes.json();
-      setInventory(invData.items || []);
-      await fetch(`http://localhost:5000/wprods/${buyModalItem._id}/reduce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: qty })
-      });
-      setWholesaleItems(prev => prev.map(w =>
-        w._id === buyModalItem._id
-          ? { ...w, numberOfItems: w.numberOfItems - qty }
+
+    // ✅ Success! Refetch inventory from backend
+    const invRes = await fetch(`http://localhost:5000/rprods/retailer/${user.id}`);
+    const invData = await invRes.json();
+    setInventory(invData.items || []);
+
+    // ✅ Update wholesaler items list (reduce stock locally for UI)
+    setWholesaleItems(prev => 
+      prev.map(w => 
+        w._id === buyModalItem._id 
+          ? { ...w, numberOfItems: w.numberOfItems - qty } 
           : w
-      ));
-      setBuyModalOpen(false);
-      setModalLoading(false);
-      alert('Item bought and added to Sell Inventory!');
-    } catch (err) {
-      setModalLoading(false);
-      alert('Error: ' + (err.message || err));
-    }
-  };
+      )
+    );
+
+    setBuyModalOpen(false);
+    setModalLoading(false);
+    
+    // ✅ Show success message with new balance
+    alert(
+      `✅ Purchase Successful!\n\n` +
+      `Item added to Sell Inventory\n` +
+      `New Balance: ₹${data.newBalance?.toLocaleString()}`
+    );
+
+  } catch (err) {
+    setModalLoading(false);
+    console.error('Purchase error:', err);
+    alert('Error: ' + (err.message || 'Purchase failed'));
+  }
+};
+
+    
 
   // Stats
   const totalUnits = inventory.reduce((s, it) => s + Number(it.numberOfItems || 0), 0);
