@@ -8,7 +8,7 @@ import User from "./models/User.js";
 import cors from "cors";
 import Otp from "./models/Otp.js";
 import WProd from "./models/WProd.js";
-
+import WalletTransaction from "./models/WalletTransaction.js";
 //console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
 
@@ -335,6 +335,45 @@ app.post("/wprods/create", async (req, res) => {
   }
 });
 
+// Add money to wallet
+app.post('/api/wallet-add', async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    
+    if (!userId || !amount) {
+      return res.status(400).json({ message: 'Missing userId or amount' });
+    }
+
+    // 👇 THIS IS WHERE accountBalance GETS INCREMENTED 👇
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { accountBalance: Number(amount) } }, // ← Increments balance by amount
+      { new: true } // Returns the updated user
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Record the transaction
+    const txn = await WalletTransaction.create({
+      userId,
+      amount: Number(amount),
+      type: 'credit',
+      description: 'Wallet top-up'
+    });
+
+    return res.json({
+      message: 'Payment successful',
+      transactionId: txn._id,
+      newBalance: user.accountBalance // Returns updated balance
+    });
+  } catch (err) {
+    console.error('Error in /api/wallet-add:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 app.get("/wprods/:wholesalerId", async (req, res) => {
   try {
@@ -360,6 +399,28 @@ app.get("/wprods", async (req, res) => {
     return res.status(500).json({ message: "Server error." });
   }
 });
+
+// Get user by ID (for fetching wallet balance)
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      accountBalance: user.accountBalance || 0
+    });
+  } catch (err) {
+    console.error('Error fetching user:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 
     app.listen(PORT, () => {
