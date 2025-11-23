@@ -16,7 +16,7 @@ const CustomerPage = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const selectedCategory = searchParams.get('category');
-  
+
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [productRatings, setProductRatings] = useState({});
@@ -26,6 +26,9 @@ const CustomerPage = () => {
   const [modalProd, setModalProd] = useState(null);
   const [modalQty, setModalQty] = useState(1);
   const [loading, setLoading] = useState(true);
+
+  // Add sort state
+  const [sortType, setSortType] = useState('');
 
   // Fetch all products
   useEffect(() => {
@@ -42,7 +45,6 @@ const CustomerPage = () => {
     const fetchCartCount = async () => {
       const customerId = getCustomerId();
       if (!customerId || customerId === 'demo-id') return;
-
       try {
         const res = await fetch(`http://localhost:5000/cart/${customerId}`);
         if (res.ok) {
@@ -54,14 +56,11 @@ const CustomerPage = () => {
         console.error('Error fetching cart count:', err);
       }
     };
-
     fetchCartCount();
 
-    // Listen for cart updates
     const handleCartUpdate = () => {
       fetchCartCount();
     };
-
     window.addEventListener('cartUpdated', handleCartUpdate);
     return () => window.removeEventListener('cartUpdated', handleCartUpdate);
   }, []);
@@ -99,7 +98,7 @@ const CustomerPage = () => {
     return () => window.removeEventListener('searchQueryChanged', handleSearchChange);
   }, []);
 
-  // Filter products by category AND search query
+  // Filter products by category AND search query AND sort
   useEffect(() => {
     let filtered = products;
 
@@ -115,8 +114,23 @@ const CustomerPage = () => {
       filtered = filterItemsBySearch(filtered, searchQuery);
     }
 
+    // Then sort by selected sort type
+    if (sortType === 'rating') {
+      filtered = [...filtered].sort((a, b) => {
+        const aRating = productRatings[a._id] ?? 0;
+        const bRating = productRatings[b._id] ?? 0;
+        return bRating - aRating;
+      });
+    }
+    else if (sortType === 'stock') {
+      filtered = [...filtered].sort((a, b) => (b.numberOfItems ?? 0) - (a.numberOfItems ?? 0));
+    }
+    else if (sortType === 'price') {
+      filtered = [...filtered].sort((a, b) => (a.sellingPrice ?? 0) - (b.sellingPrice ?? 0));
+    }
+
     setFilteredProducts(filtered);
-  }, [selectedCategory, products, searchQuery]);
+  }, [selectedCategory, products, searchQuery, sortType, productRatings]);
 
   const openModal = (prod) => {
     setModalProd(prod);
@@ -161,7 +175,7 @@ const CustomerPage = () => {
       </section>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* Filter and Cart Button Row */}
+        {/* Filter, Sort, Cart Button Row */}
         <div className="mb-6 flex justify-between items-center">
           {/* Show active filter or search status */}
           <div>
@@ -191,21 +205,48 @@ const CustomerPage = () => {
             )}
           </div>
 
-          {/* View Your Cart Button */}
-          <button
-            onClick={() => router.push('/cart')}
-            className="px-6 py-2 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold shadow transition cursor-pointer flex items-center gap-2"
-          >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5" 
-              viewBox="0 0 20 20" 
-              fill="currentColor"
+          <div className="flex items-center gap-4">
+            {/* Sort Dropdown */}
+            <select
+  value={sortType}
+  onChange={e => setSortType(e.target.value)}
+  className="
+    pl-4 pr-8 py-2 rounded-lg border border-orange-500 font-semibold
+    bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200
+    shadow transition focus:outline-none
+    appearance-none bg-no-repeat
+  "
+  style={{
+    minWidth: 190,
+    
+    backgroundPosition: "right 1.2rem center", // adjust this value to move arrow left/right
+    backgroundSize: "0.8rem"
+  }}
+>
+  <option value="">Sort By... ⬇️</option>
+  <option value="rating">Rating</option>
+  <option value="stock">Stock</option>
+  <option value="price">Price</option>
+</select>
+
+
+
+            {/* View Your Cart Button */}
+            <button
+              onClick={() => router.push('/cart')}
+              className="px-6 py-2 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold shadow transition cursor-pointer flex items-center gap-2"
             >
-              <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
-            </svg>
-            View Your Cart {cartCount > 0 && `(${cartCount})`}
-          </button>
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                className="h-5 w-5" 
+                viewBox="0 0 20 20" 
+                fill="currentColor"
+              >
+                <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+              </svg>
+              View Your Cart {cartCount > 0 && `(${cartCount})`}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
@@ -280,7 +321,6 @@ const CustomerPage = () => {
 
                 {/* Card Body */}
                 <div className="flex flex-col flex-1 px-6 pb-4 bg-white dark:bg-gray-800 rounded-b-3xl">
-                  {/* Title - Fixed height with line clamp */}
                   <h3
                     className="mt-4 mb-2 text-lg font-semibold text-black dark:text-white break-words leading-tight line-clamp-2"
                     style={{ minHeight: '3.5rem' }}
@@ -288,7 +328,6 @@ const CustomerPage = () => {
                     {prod.productName}
                   </h3>
 
-                  {/* Description - Fixed height with line clamp */}
                   <p
                     className="text-sm text-gray-700 dark:text-gray-300 mb-3 line-clamp-2"
                     style={{ minHeight: '2.5rem' }}
@@ -296,7 +335,6 @@ const CustomerPage = () => {
                     {prod.description}
                   </p>
 
-                  {/* Rating */}
                   {productRatings[prod._id] !== undefined && productRatings[prod._id] >= 0 && (
                     <div className="flex items-center gap-1 mb-2">
                       <span className="text-yellow-500 font-bold text-lg">
@@ -313,20 +351,15 @@ const CustomerPage = () => {
                     </div>
                   )}
 
-                  {/* Price */}
                   <div className="text-[22px] font-bold text-orange-300 mb-2">
                     ₹{prod.sellingPrice}
                   </div>
 
-                  {/* Stock */}
                   <div className="mb-4 text-[15px] text-green-400 font-bold">
                     In Stock: {prod.numberOfItems ?? 0} units
                   </div>
 
-                  {/* Spacer to push button to bottom */}
                   <div className="flex-1" />
-
-                  {/* Button at bottom */}
                   <div className="w-full flex justify-center">
                     <button
                       onClick={e => {
@@ -345,7 +378,6 @@ const CustomerPage = () => {
           )}
         </div>
       </div>
-
       <Footer />
     </div>
   );
