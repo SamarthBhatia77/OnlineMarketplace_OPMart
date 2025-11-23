@@ -192,13 +192,16 @@ app.get('/rprods', async (req, res) => {
 //Getting the cart for a customer
 app.get('/cart/:customerId', async (req, res) => {
   try {
-    // Populate rprodId to pull product details for card display
-    const items = await Cart.find({ customerId: req.params.customerId }).populate('rprodId');
+    const items = await Cart.find({ 
+      customerId: new mongoose.Types.ObjectId(req.params.customerId) 
+    }).populate('rprodId');
     res.status(200).json({ items });
   } catch (err) {
+    console.error('Error in GET /cart/:customerId', err);
     res.status(500).json({ message: "Server error." });
   }
 });
+
 
 //POST route for cprods collection (after customer purchases a given number of items)
 app.post('/cprods', async (req, res) => {
@@ -226,6 +229,35 @@ app.put('/cprods/:cid/rate', async (req, res) => {
   await CProd.findByIdAndUpdate(req.params.cid, { review: Math.max(1, Math.min(5, review)) });
   res.json({ message: "Review updated" });
 });
+
+
+// Get average rating for a product
+app.get('/api/product-rating/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    
+    // Find all purchases of this product across all customers
+    const purchases = await CProd.find({ productId });
+    
+    if (purchases.length === 0) {
+      return res.json({ averageRating: 0, reviewCount: 0 });
+    }
+    
+    // Calculate average rating
+    const totalRating = purchases.reduce((sum, purchase) => sum + (purchase.review || 0), 0);
+    const averageRating = totalRating / purchases.length;
+    
+    res.json({ 
+      averageRating: parseFloat(averageRating.toFixed(1)),
+      reviewCount: purchases.length 
+    });
+  } catch (err) {
+    console.error('Error fetching product rating:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
 
 //GET retailer bought products
 // Get all rprods for a specific retailer
