@@ -8,6 +8,11 @@ import User from "./models/User.js";
 import cors from "cors";
 import Otp from "./models/Otp.js";
 import WProd from "./models/WProd.js";
+import CProd from './models/CProd.js';
+
+import RProd from './models/RProd.js';
+
+import Cart from './models/Cart.js';
 import WalletTransaction from "./models/WalletTransaction.js";
 //console.log("Cloudinary ENV check:", process.env.CLOUDINARY_CLOUD_NAME, process.env.CLOUDINARY_API_KEY, process.env.CLOUDINARY_API_SECRET);
 
@@ -116,6 +121,117 @@ async function startServer() {
         return res.status(500).json({ message: "Server error." });
       }
     });
+
+
+    //rprods route
+    
+// Add purchased retailer product into rprods
+app.post("/rprods", async (req, res) => {
+  try {
+    const {
+      retailerId, wholesalerProdId, productName, description, image,
+      category, marketPrice, numberOfItems, sellingPrice
+    } = req.body;
+    if (!retailerId || !wholesalerProdId) return res.status(400).json({ message: "Missing info" });
+    const RProd = mongoose.model('RProd') // or require('./models/RProd.js') if needed
+    const rprod = await RProd.create({
+      retailerId, wholesalerProdId, productName, description, image,
+      category, marketPrice, numberOfItems, sellingPrice, createdAt: new Date()
+    });
+    return res.status(201).json({ success: true, retailerProdId: rprod._id });
+  } catch (err) {
+    console.error("Error in POST /rprods", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+//reduce wholesaler stock after bought by retailer
+app.post("/wprods/:id/reduce", async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const id = req.params.id;
+    const WProd = mongoose.model('WProd'); // or require('./models/WProd.js')
+    const prod = await WProd.findById(id);
+    if (!prod) return res.status(404).json({ message: "Product not found" });
+    if (prod.numberOfItems < quantity) return res.status(400).json({ message: "Not enough items in stock" });
+    prod.numberOfItems -= quantity;
+    await prod.save();
+    res.status(200).json({ success: true, numberOfItems: prod.numberOfItems });
+  } catch (err) {
+    console.error("Error in POST /wprods/:id/reduce", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+
+//customer add to cart POST
+app.post('/cart', async (req, res) => {
+  try {
+    const { customerId, rprodId, quantity } = req.body;
+    if (!customerId || !rprodId) return res.status(400).json({ message: "Missing info" });
+    // Check for duplicate & update quantity if desired, or just insert new for simplicity
+    const existing = await Cart.findOne({ customerId, rprodId });
+    if (existing) {
+      existing.quantity += Number(quantity);
+      await existing.save();
+      return res.status(200).json({ message: "Cart updated!" });
+    }
+    await Cart.create({ customerId, rprodId, quantity });
+    res.status(201).json({ message: "Added to cart!" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+//Getting all the retailer products for the customer dashboard
+app.get('/rprods', async (req, res) => {
+  try {
+    const items = await RProd.find({}).sort({ createdAt: -1 });
+    res.status(200).json({ items });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+//Getting the cart for a customer
+app.get('/cart/:customerId', async (req, res) => {
+  try {
+    // Populate rprodId to pull product details for card display
+    const items = await Cart.find({ customerId: req.params.customerId }).populate('rprodId');
+    res.status(200).json({ items });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+//POST route for cprods collection (after customer purchases a given number of items)
+app.post('/cprods', async (req, res) => {
+  try {
+    const { customerId, productId, productName, description, image, category, quantity, pricePerItem, totalPrice, review } = req.body;
+    const newPurchase = await CProd.create({
+      customerId, productId, productName, description, image, category,
+      quantity, pricePerItem, totalPrice, review: review || 0
+    });
+    res.status(201).json({ message: "Purchase recorded", purchase: newPurchase });
+  } catch (err) {
+    res.status(500).json({ message: "Error recording purchase" });
+  }
+});
+
+//GET for user
+app.get('/cprods/user/:uid', async (req, res) => {
+  const items = await CProd.find({ customerId: req.params.uid });
+  res.json({ items });
+});
+
+//PUT for review
+app.put('/cprods/:cid/rate', async (req, res) => {
+  const { review } = req.body;
+  await CProd.findByIdAndUpdate(req.params.cid, { review: Math.max(1, Math.min(5, review)) });
+  res.json({ message: "Review updated" });
+});
+
+
 
     // LOGIN ROUTE
     app.post("/auth/login", async (req, res) => {

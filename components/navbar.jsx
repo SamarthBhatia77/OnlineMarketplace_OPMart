@@ -106,7 +106,7 @@ const Navbar = () => {
   };
 
   const handleChangeAccount = () => {
-    router.push('/portfolioChoose');
+    router.push('/');
     setShowUserMenu(false);
   };
 

@@ -329,7 +329,7 @@ const handleUseMyLocation = () => {
         {/* Logo/Brand */}
         <div className="text-center mb-8">
           <h1 className="text-5xl mt-8 font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent font-poppins mb-2">
-            OOPMart
+            OPMart 🛒
           </h1>
           <p className="text-gray-600 text-sm">Everyone's favorite shopping destination!</p>
         </div>
