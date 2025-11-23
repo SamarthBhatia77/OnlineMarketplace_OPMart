@@ -1,0 +1,887 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from "express";
+import mongoose from "mongoose";
+import { MONGODB_URI } from "./config.js";
+import User from "./models/User.js";
+import cors from "cors";
+import Otp from "./models/Otp.js";
+import WProd from "./models/WProd.js";
+import CProd from './models/CProd.js';
+
+import RProd from './models/RProd.js';
+
+import Cart from './models/Cart.js';
+import WalletTransaction from "./models/WalletTransaction.js";
+
+
+import { uploadToImageKit } from "./imagekit.js";
+import { sendOtpEmail } from "./email.js";
+import { OAuth2Client } from "google-auth-library";
+
+const GOOGLE_CLIENT_ID =
+  "1028953534432-aarvrfrl3h69e16saed41s9qod8q69vc.apps.googleusercontent.com";
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+const app = express();
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+  })
+);
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+const PORT = 5000;
+
+// Connect to MongoDB Atlas and start server
+async function startServer() {
+  try {
+    await mongoose.connect(MONGODB_URI);
+    console.log("✅ Connected to MongoDB Atlas");
+
+    // Root test route
+    app.get("/", (req, res) => {
+      res.send("Backend is working and connected to MongoDB!");
+    });
+
+    // REAL SIGNUP ROUTE (with OTP)
+    app.post("/auth/signup", async (req, res) => {
+      try {
+        const {
+          fullName,
+          email,
+          password,
+          role,
+          address,
+          city,
+          state,
+          pincode,
+          location,
+        } = req.body;
+
+        if (!fullName || !email || !password || !role) {
+          return res
+            .status(400)
+            .json({ message: "All fields are required." });
+        }
+
+        const allowedRoles = ["customer", "retailer", "wholesaler"];
+        if (!allowedRoles.includes(role)) {
+          return res.status(400).json({ message: "Invalid role." });
+        }
+
+        const existingUser = await User.findOne({
+          email: email.toLowerCase(),
+        });
+        if (existingUser) {
+          return res
+            .status(409)
+            .json({ message: "Email is already registered." });
+        }
+
+        const newUser = new User({
+          fullName,
+          email,
+          password,
+          role,
+          isEmailVerified: false,
+          address: address || "",
+          city: city || "",
+          state: state || "",
+          pincode: pincode || "",
+          location: location || null,
+        });
+
+        await newUser.save();
+
+        const otpCode = Math.floor(
+          100000 + Math.random() * 900000
+        ).toString();
+
+        const expires = new Date(Date.now() + 10 * 60 * 1000);
+        await Otp.create({
+          email: email.toLowerCase(),
+          code: otpCode,
+          expiresAt: expires,
+        });
+
+        await sendOtpEmail(email, otpCode);
+
+        return res.status(201).json({
+          message: "User registered. OTP sent to email.",
+          email: email.toLowerCase(),
+        });
+      } catch (err) {
+        console.error("Error in /auth/signup:", err.message);
+        return res.status(500).json({ message: "Server error." });
+      }
+    });
+
+
+    //rprods route
+    
+// Add purchased retailer product into rprods
+// Add purchased retailer product into rprods WITH BALANCE CHECK
+// RETAILER PURCHASES FROM WHOLESALER
+// Add purchased retailer product into rprods WITH BALANCE CHECK
+app.post("/rprods", async (req, res) => {
+  try {
+    const {
+      retailerId, 
+      wholesalerProdId, 
+      productName, 
+      description, 
+      image,
+      category, 
+      marketPrice, 
+      numberOfItems, 
+      sellingPrice
+    } = req.body;
+
+    if (!retailerId || !wholesalerProdId) {
+      return res.status(400).json({ message: "Missing info" });
+    }
+
+    // 1. Get the WProd to find wholesaler and verify stock
+    const wProd = await WProd.findById(wholesalerProdId);
+    if (!wProd) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // 2. Check if enough stock available
+    if (wProd.numberOfItems < numberOfItems) {
+      return res.status(400).json({ 
+        message: `Insufficient stock. Only ${wProd.numberOfItems} units available.` 
+      });
+    }
+
+    // 3. Get retailer and wholesaler users
+    const retailer = await User.findById(retailerId);
+    const wholesaler = await User.findById(wProd.wholesalerId);
+
+    if (!retailer || !wholesaler) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 4. Calculate total cost (wholesaler's price × quantity)
+    const totalCost = numberOfItems * marketPrice;
+
+    // 5. ✅ CHECK BALANCE
+    if (retailer.accountBalance < totalCost) {
+      return res.status(400).json({ 
+        message: "Insufficient balance",
+        required: totalCost,
+        available: retailer.accountBalance
+      });
+    }
+
+    // 6. ✅ PERFORM TRANSACTION
+    // Deduct from retailer
+    retailer.accountBalance -= totalCost;
+    await retailer.save();
+
+    // Add to wholesaler
+    wholesaler.accountBalance += totalCost;
+    await wholesaler.save();
+
+    // 7. Create RProd entry
+    const rprod = await RProd.create({
+      retailerId, 
+      wholesalerProdId, 
+      productName, 
+      description, 
+      image,
+      category, 
+      marketPrice, 
+      numberOfItems, 
+      sellingPrice, 
+      createdAt: new Date()
+    });
+
+    // 8. Reduce WProd stock
+    wProd.numberOfItems -= numberOfItems;
+    await wProd.save();
+
+    // 9. Create wallet transaction records
+    await WalletTransaction.create({
+      userId: retailerId,
+      amount: -totalCost,
+      type: "debit",
+      description: `Purchased ${numberOfItems} units of ${productName} from wholesaler`,
+    });
+
+    await WalletTransaction.create({
+      userId: wholesaler._id,
+      amount: totalCost,
+      type: "credit",
+      description: `Sale of ${numberOfItems} units of ${productName} to retailer`,
+    });
+
+    // 10. Return success with updated balance
+    return res.status(201).json({ 
+      success: true, 
+      retailerProdId: rprod._id,
+      newBalance: retailer.accountBalance,
+      message: "Purchase successful"
+    });
+
+  } catch (err) {
+    console.error("Error in POST /rprods", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+//reduce wholesaler stock after bought by retailer
+app.post("/wprods/:id/reduce", async (req, res) => {
+  try {
+    const { quantity } = req.body;
+    const id = req.params.id;
+    const WProd = mongoose.model('WProd'); // or require('./models/WProd.js')
+    const prod = await WProd.findById(id);
+    if (!prod) return res.status(404).json({ message: "Product not found" });
+    if (prod.numberOfItems < quantity) return res.status(400).json({ message: "Not enough items in stock" });
+    prod.numberOfItems -= quantity;
+    await prod.save();
+    res.status(200).json({ success: true, numberOfItems: prod.numberOfItems });
+  } catch (err) {
+    console.error("Error in POST /wprods/:id/reduce", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+// DELETE item from cart
+app.delete('/cart/:cartItemId', async (req, res) => {
+  try {
+    const { cartItemId } = req.params;
+    
+    const result = await Cart.findByIdAndDelete(cartItemId);
+    
+    if (!result) {
+      return res.status(404).json({ message: 'Cart item not found' });
+    }
+    
+    res.status(200).json({ message: 'Item removed from cart successfully' });
+  } catch (err) {
+    console.error('Error deleting cart item:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET total profit made by a retailer (sum of totalPrice for products where this retailer is the seller)
+// [GET] /cprods/retailer/:retailerId/profit
+app.get('/cprods/retailer/:retailerId/profit', async (req, res) => {
+  try {
+    const { retailerId } = req.params;
+
+    // Get all rprod IDs for this retailer
+    const rprods = await RProd.find({ retailerId }, { _id: 1 });
+    const rprodIds = rprods.map(rp => rp._id);
+
+    // Get sum of totalPrice in cprods for these productIds
+    const sumDoc = await CProd.aggregate([
+      { $match: { productId: { $in: rprodIds } } },
+      { $group: { _id: null, profit: { $sum: "$totalPrice" } } }
+    ]);
+    const profit = sumDoc.length > 0 ? sumDoc[0].profit : 0;
+
+    res.json({ profit });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.toString() });
+  }
+});
+
+
+
+
+// POST item post for wholesaler
+app.post('/wprods/create', async (req, res) => {
+  try {
+    const { 
+      wholesalerId, 
+      productName, 
+      description, 
+      sellingPrice, 
+      numberOfItems, 
+      category, 
+      base64Image 
+    } = req.body;
+
+    // Validate required fields
+    if (!wholesalerId || !productName || !sellingPrice || !numberOfItems || !base64Image) {
+      return res.status(400).json({ 
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Create new product
+    const newProduct = new WProd({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice: Number(sellingPrice),
+      numberOfItems: Number(numberOfItems),
+      category,
+      image: base64Image, // Store base64 directly or upload to cloud
+      createdAt: new Date()
+    });
+
+    await newProduct.save();
+
+    res.status(201).json({ 
+      message: 'Product created successfully',
+      item: newProduct 
+    });
+  } catch (err) {
+    console.error('Error creating product:', err);
+    res.status(500).json({ 
+      message: 'Server error while creating product' 
+    });
+  }
+});
+
+
+//customer add to cart POST
+app.post('/cart', async (req, res) => {
+  try {
+    const { customerId, rprodId, quantity } = req.body;
+    if (!customerId || !rprodId) return res.status(400).json({ message: "Missing info" });
+    // Check for duplicate & update quantity if desired, or just insert new for simplicity
+    const existing = await Cart.findOne({ customerId, rprodId });
+    if (existing) {
+      existing.quantity += Number(quantity);
+      await existing.save();
+      return res.status(200).json({ message: "Cart updated!" });
+    }
+    await Cart.create({ customerId, rprodId, quantity });
+    res.status(201).json({ message: "Added to cart!" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+//Getting all the retailer products for the customer dashboard
+app.get('/rprods', async (req, res) => {
+  try {
+    const items = await RProd.find({}).sort({ createdAt: -1 });
+    res.status(200).json({ items });
+  } catch (err) {
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+//Getting the cart for a customer
+app.get('/cart/:customerId', async (req, res) => {
+  try {
+    const items = await Cart.find({ 
+      customerId: new mongoose.Types.ObjectId(req.params.customerId) 
+    }).populate('rprodId');
+    res.status(200).json({ items });
+  } catch (err) {
+    console.error('Error in GET /cart/:customerId', err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+
+//POST route for cprods collection (after customer purchases a given number of items)
+// CUSTOMER PURCHASES FROM RETAILER (with balance check)
+app.post('/cprods', async (req, res) => {
+  try {
+    const {
+      customerId,
+      retailerProdId,  // This is the RProd _id (the product customer is buying)
+      productName,
+      description,
+      image,
+      category,
+      quantity,
+      pricePerItem,
+      review
+    } = req.body;
+
+    if (!customerId || !retailerProdId || !quantity || !pricePerItem) {
+      return res.status(400).json({ message: "Missing required info" });
+    }
+
+    // 1. Get the RProd to find retailer and verify stock
+    const rProd = await RProd.findById(retailerProdId);
+    if (!rProd) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // 2. Check if enough stock available
+    if (rProd.numberOfItems < quantity) {
+      return res.status(400).json({
+        message: `Insufficient stock. Only ${rProd.numberOfItems} units available.`
+      });
+    }
+
+    // 3. Get customer and retailer users
+    console.log("Incoming customerId:", customerId);
+
+    const customer = await User.findById(customerId);
+    const retailer = await User.findById(rProd.retailerId);
+
+    if (!customer || !retailer) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 4. Calculate total cost (retailer's price × quantity)
+    const totalPrice = quantity * pricePerItem;
+
+    // 5. ✅ CHECK BALANCE
+    if (customer.accountBalance < totalPrice) {
+      return res.status(400).json({
+        message: "Insufficient balance",
+        required: totalPrice,
+        available: customer.accountBalance
+      });
+    }
+
+    // 6. ✅ PERFORM TRANSACTION
+    // Deduct from customer
+    customer.accountBalance -= totalPrice;
+    await customer.save();
+
+    // Add to retailer
+    retailer.accountBalance += totalPrice;
+    await retailer.save();
+
+    // 7. Create CProd entry (customer purchase record)
+    const cprod = await CProd.create({
+      customerId,
+      productId: retailerProdId,  // Reference to RProd
+      productName,
+      description,
+      image,
+      category,
+      quantity,
+      pricePerItem,
+      totalPrice,
+      review: review || 0,
+      createdAt: new Date()
+    });
+
+    // 8. Reduce RProd stock
+    rProd.numberOfItems -= quantity;
+    await rProd.save();
+
+    // 9. Create wallet transaction records
+    await WalletTransaction.create({
+      userId: customerId,
+      amount: -totalPrice,
+      type: "debit",
+      description: `Purchased ${quantity} units of ${productName} from retailer`
+    });
+
+    await WalletTransaction.create({
+      userId: retailer._id,
+      amount: totalPrice,
+      type: "credit",
+      description: `Sale of ${quantity} units of ${productName} to customer`
+    });
+
+    // 10. Return success with updated balance
+    return res.status(201).json({
+      success: true,
+      customerProdId: cprod._id,
+      newBalance: customer.accountBalance,
+      message: "Purchase successful"
+    });
+
+  } catch (err) {
+    console.error("Error in POST /cprods:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+
+//GET for user
+app.get('/cprods/user/:uid', async (req, res) => {
+  const items = await CProd.find({ customerId: req.params.uid });
+  res.json({ items });
+});
+
+//PUT for review
+app.put('/cprods/:cid/rate', async (req, res) => {
+  const { review } = req.body;
+  await CProd.findByIdAndUpdate(req.params.cid, { review: Math.max(1, Math.min(5, review)) });
+  res.json({ message: "Review updated" });
+});
+
+
+// Get average rating for a product
+app.get('/api/product-rating/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    
+    // Find all purchases of this product across all customers
+    const purchases = await CProd.find({ productId });
+    
+    if (purchases.length === 0) {
+      return res.json({ averageRating: 0, reviewCount: 0 });
+    }
+    
+    // Calculate average rating
+    const totalRating = purchases.reduce((sum, purchase) => sum + (purchase.review || 0), 0);
+    const averageRating = totalRating / purchases.length;
+    
+    res.json({ 
+      averageRating: parseFloat(averageRating.toFixed(1)),
+      reviewCount: purchases.length 
+    });
+  } catch (err) {
+    console.error('Error fetching product rating:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+//GET retailer bought products
+// Get all rprods for a specific retailer
+app.get('/rprods/retailer/:retailerId', async (req, res) => {
+  try {
+    const items = await RProd.find({ retailerId: req.params.retailerId }).sort({ createdAt: -1 });
+    res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error fetching retailer rprods:", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+
+
+
+    // LOGIN ROUTE
+    app.post("/auth/login", async (req, res) => {
+      try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+          return res
+            .status(400)
+            .json({ message: "Email and password are required." });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+          return res
+            .status(401)
+            .json({ message: "Invalid email or password." });
+        }
+
+        const isMatch = await user.checkPassword(password);
+        if (!isMatch) {
+          return res
+            .status(401)
+            .json({ message: "Invalid email or password." });
+        }
+
+        if (!user.isEmailVerified) {
+          return res
+            .status(403)
+            .json({ message: "Please verify your email first." });
+        }
+
+        return res.status(200).json({
+          message: "Login successful.",
+          user: {
+            id: user._id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      } catch (err) {
+        console.error("Error in /auth/login:", err.message);
+        return res.status(500).json({ message: "Server error." });
+      }
+    });
+
+    // GOOGLE AUTH ROUTE
+    app.post("/auth/google", async (req, res) => {
+      try {
+        const { idToken, role } = req.body;
+
+        if (!idToken) {
+          return res
+            .status(400)
+            .json({ message: "Google ID token is required." });
+        }
+
+        const ticket = await googleClient.verifyIdToken({
+          idToken,
+          audience: GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const email = payload.email;
+        const fullName =
+          payload.name || payload.given_name || "Google User";
+
+        if (!email) {
+          return res
+            .status(400)
+            .json({ message: "Google account has no email." });
+        }
+
+        let user = await User.findOne({ email: email.toLowerCase() });
+
+        if (!user) {
+          const finalRole =
+            role &&
+            ["customer", "retailer", "wholesaler"].includes(role)
+              ? role
+              : "customer";
+
+          user = new User({
+            fullName,
+            email,
+            password: "google-auth-no-password",
+            role: finalRole,
+            isEmailVerified: true,
+          });
+          await user.save();
+        }
+
+        return res.status(200).json({
+          message: "Google login successful.",
+          user: {
+            id: user._id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      } catch (err) {
+        console.error("Error in /auth/google:", err.message);
+        return res
+          .status(500)
+          .json({ message: "Google login failed." });
+      }
+    });
+
+    // OTP VERIFY
+    app.post("/auth/verify_otp", async (req, res) => {
+      try {
+        const { email, code } = req.body;
+
+        if (!email || !code) {
+          return res
+            .status(400)
+            .json({ message: "Email and OTP code are required." });
+        }
+
+        const normalizedEmail = email.toLowerCase();
+
+        const otpEntry = await Otp.findOne({
+          email: normalizedEmail,
+          code,
+          used: false,
+          expiresAt: { $gt: new Date() },
+        }).sort({ createdAt: -1 });
+
+        if (!otpEntry) {
+          return res
+            .status(400)
+            .json({ message: "Invalid or expired OTP." });
+        }
+
+        otpEntry.used = true;
+        await otpEntry.save();
+
+        const user = await User.findOneAndUpdate(
+          { email: normalizedEmail },
+          { isEmailVerified: true },
+          { new: true }
+        );
+
+        if (!user) {
+          return res.status(404).json({ message: "User not found." });
+        }
+
+        return res.status(200).json({
+          message: "Email verified successfully.",
+          user: {
+            id: user._id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+          },
+        });
+      } catch (err) {
+        console.error("Error in /auth/verify_otp:", err.message);
+        return res.status(500).json({ message: "Server error." });
+      }
+    });
+
+    // ===========================
+    // WHOLESALER PRODUCTS (WPRODS)
+    // ===========================
+
+    // Create a new product for a wholesaler
+    // CREATE PRODUCT
+app.post("/wprods/create", async (req, res) => {
+  try {
+    const {
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice,
+      numberOfItems,
+      category,
+      base64Image,
+    } = req.body;
+
+    console.log("CREATE /wprods/create body:", req.body);
+
+    if (
+      !wholesalerId ||
+      !productName ||
+      !description ||
+      !sellingPrice ||
+      !numberOfItems ||
+      !category ||
+      !base64Image
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Missing required fields." });
+    }
+
+    // 1. Upload image to ImageKit
+const imageUrl = await uploadToImageKit(base64Image, `${productName}_${Date.now()}`);
+
+    // 2. Actually create and save the product in MongoDB (IMPORTANT!)
+    const newItem = await WProd.create({
+      wholesalerId,
+      productName,
+      description,
+      sellingPrice,
+      numberOfItems,
+      category,
+      image: imageUrl, // ImageKit URL
+    });
+
+    // 3. Respond with the new item
+    return res.status(201).json({ item: newItem });
+  } catch (err) {
+    console.error("Error in /wprods/create:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+// Add money to wallet
+app.post('/api/wallet-add', async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    
+    if (!userId || !amount) {
+      return res.status(400).json({ message: 'Missing userId or amount' });
+    }
+
+    // 👇 THIS IS WHERE accountBalance GETS INCREMENTED 👇
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { accountBalance: Number(amount) } }, // ← Increments balance by amount
+      { new: true } // Returns the updated user
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Record the transaction
+    const txn = await WalletTransaction.create({
+      userId,
+      amount: Number(amount),
+      type: 'credit',
+      description: 'Wallet top-up'
+    });
+
+    return res.json({
+      message: 'Payment successful',
+      transactionId: txn._id,
+      newBalance: user.accountBalance // Returns updated balance
+    });
+  } catch (err) {
+    console.error('Error in /api/wallet-add:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user by ID (for location fetching)
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('location fullName email role city state');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.get("/wprods/:wholesalerId", async (req, res) => {
+  try {
+    const { wholesalerId } = req.params;
+    console.log("GET /wprods for:", wholesalerId);         // 👈 add this
+
+    const items = await WProd.find({ wholesalerId }).sort({
+      createdAt: -1,
+    });
+    return res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error in GET /wprods/:wholesalerId:", err); // 👈 full error
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+app.get("/wprods", async (req, res) => {
+  try {
+    const items = await WProd.find({}).sort({ createdAt: -1 });
+    return res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error in GET /wprods", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+// Get user by ID (for fetching wallet balance)
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      accountBalance: user.accountBalance || 0
+    });
+  } catch (err) {
+    console.error('Error fetching user:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ Error connecting to MongoDB:", err.message);
+  }
+}
+
+startServer();
