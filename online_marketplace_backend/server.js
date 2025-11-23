@@ -231,6 +231,19 @@ app.put('/cprods/:cid/rate', async (req, res) => {
   res.json({ message: "Review updated" });
 });
 
+//GET retailer bought products
+// Get all rprods for a specific retailer
+app.get('/rprods/retailer/:retailerId', async (req, res) => {
+  try {
+    const items = await RProd.find({ retailerId: req.params.retailerId }).sort({ createdAt: -1 });
+    res.status(200).json({ items });
+  } catch (err) {
+    console.error("Error fetching retailer rprods:", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+
 
 
     // LOGIN ROUTE

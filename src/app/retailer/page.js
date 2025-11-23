@@ -147,24 +147,31 @@ useEffect(() => {
 }, [router]);
 
 
-  // --- load retailer inventory from localStorage
-  useEffect(() => {
-    const inv = localStorage.getItem('retailer_inventory');
-    if (inv) {
-      try {
-        setInventory(JSON.parse(inv));
-      } catch (e) {
+  // --- load retailer inventory from backend
+useEffect(() => {
+  const fetchRetailerInventory = async () => {
+    if (!user || !user.id) return;
+    try {
+      const res = await fetch(`http://localhost:5000/rprods/retailer/${user.id}`);
+      if (!res.ok) {
+        console.warn('Failed to fetch retailer inventory');
         setInventory([]);
+        return;
       }
-    } else {
+      const data = await res.json();
+      setInventory(data.items || []);
+    } catch (err) {
+      console.error('Error fetching retailer inventory:', err);
       setInventory([]);
     }
-  }, []);
+  };
+  
+  if (user) {
+    fetchRetailerInventory();
+  }
+}, [user]);
 
-  // persist inventory whenever it changes
-  useEffect(() => {
-    localStorage.setItem('retailer_inventory', JSON.stringify(inventory));
-  }, [inventory]);
+  
 
   // --- fetch wholesale items (show all wholesalers' items)
   // Backend endpoint used: http://localhost:5000/wprods   (if your server uses different path, adapt)
@@ -311,16 +318,11 @@ useEffect(() => {
     }
 
     // Update frontend inventory (optimistic UI)
-    const newEntry = {
-      ...buyModalItem,
-      _id: data.retailerProdId || `rprod-${Date.now()}`,
-      numberOfItems: qty,
-      sellingPrice: Number(buySellingPrice),
-      purchasePrice: Number(buyModalItem.sellingPrice),
-      sourceWholesalerId: buyModalItem.wholesalerId,
-      purchasedAt: new Date().toISOString()
-    };
-    setInventory(prev => [newEntry, ...prev]);
+    // Refetch inventory from backend to get the latest
+    const invRes = await fetch(`http://localhost:5000/rprods/retailer/${user.id}`);
+    const invData = await invRes.json();
+    setInventory(invData.items || []);
+
 
     // Update the stock in wprods on backend
     await fetch(`http://localhost:5000/wprods/${buyModalItem._id}/reduce`, {
